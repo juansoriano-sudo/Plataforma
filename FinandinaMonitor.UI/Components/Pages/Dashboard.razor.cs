@@ -33,15 +33,27 @@ namespace FinandinaMonitor.UI.Components.Pages
 
         protected List<SolicitudItemViewModel> Solicitudes { get; set; } = new();
 
+        protected IEnumerable<SolicitudItemViewModel> FilteredSolicitudes =>
+            string.IsNullOrWhiteSpace(SearchTerm) 
+                ? Solicitudes 
+                : Solicitudes.Where(s => 
+                    s.Solicitud.IdSolicitud.ToString().Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (s.Solicitud.RadNumber != null && s.Solicitud.RadNumber.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    (s.Solicitud.NumeroDocumento != null && s.Solicitud.NumeroDocumento.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)));
+
+        protected string SearchTerm { get; set; } = "";
+
         protected bool IsLoading { get; set; } = true;
         protected bool IsProcessing { get; set; } = false;
         protected int ProgressPercent { get; set; } = 0;
         protected string AlertMessage { get; set; } = "";
         protected bool IsAlertError { get; set; } = false;
         protected bool IsDarkMode { get; set; } = false;
+        
+        protected int ExitosasHoyCount { get; set; } = 0;
 
         protected int SelectedCount => Solicitudes.Count(s => s.IsSelected);
-        protected bool IsAllSelected => Solicitudes.Any() && Solicitudes.All(s => s.IsSelected);
+        protected bool IsAllSelected => FilteredSolicitudes.Any() && FilteredSolicitudes.All(s => s.IsSelected);
 
         protected override async Task OnInitializedAsync()
         {
@@ -70,6 +82,8 @@ namespace FinandinaMonitor.UI.Components.Pages
                     IsSelected = false,
                     EstadoReproceso = string.Empty
                 }).ToList();
+
+                ExitosasHoyCount = await ReprocesoService.ObtenerCountExitosasHoyAsync();
             }
             catch (Exception ex)
             {
@@ -87,7 +101,7 @@ namespace FinandinaMonitor.UI.Components.Pages
         protected void ToggleSelectAll(ChangeEventArgs e)
         {
             var isChecked = e.Value is bool b && b;
-            foreach (var item in Solicitudes)
+            foreach (var item in FilteredSolicitudes)
             {
                 item.IsSelected = isChecked;
             }
@@ -148,6 +162,7 @@ namespace FinandinaMonitor.UI.Components.Pages
                             item.EstadoReproceso = "Éxito";
                             item.IsSelected = false; // Auto uncheck on success
                             exitos++;
+                            ExitosasHoyCount++; // Incrementamos el contador de exitosas hoy de forma optimista
                         }
                         else
                         {

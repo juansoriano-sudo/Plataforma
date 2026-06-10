@@ -76,3 +76,4 @@ C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.UI\obj\Debug\net10.0
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.UI\obj\Debug\net10.0\ref\FinandinaMonitor.UI.dll
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.UI\bin\Debug\net10.0\MySqlConnector.dll
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.UI\obj\Debug\net10.0\compressed\lt6woc4zb2-{0}-u3snbr8v5d-u3snbr8v5d.gz
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.UI\obj\Debug\net10.0\FinandinaMonitor.UI.sourcelink.json

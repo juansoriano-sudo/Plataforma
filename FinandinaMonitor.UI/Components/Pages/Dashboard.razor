@@ -34,23 +34,23 @@
             <span class="kpi-value">@Solicitudes.Count</span>
         </div>
         <div class="kpi-card kpi-success">
-            <span class="kpi-label">Seleccionados</span>
+            <span class="kpi-label">Firmas Exitosas Hoy</span>
+            <span class="kpi-value">@ExitosasHoyCount</span>
+        </div>
+        <div class="kpi-card kpi-primary" style="border-left-color: var(--text-muted)">
+            <span class="kpi-label">Fila(s) Seleccionada(s)</span>
             <span class="kpi-value">@SelectedCount</span>
         </div>
     </section>
 
     <!-- Main Workspace -->
     <div class="glass-card">
-        <div class="actions-panel">
-            <div class="selection-info">
-                @if (SelectedCount > 0)
-                {
-                    <span>Seleccionados: @SelectedCount</span>
-                }
-                else
-                {
-                    @("Ningún registro seleccionado")
-                }
+        <div class="actions-panel" style="gap: 1.5rem; flex-wrap: wrap;">
+            <div class="search-box" style="flex: 1; min-width: 280px;">
+                <input type="text" @bind="SearchTerm" @bind:event="oninput" 
+                       placeholder="Buscar por ID, Radicado o Documento..." 
+                       style="width: 90%; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; font-size: 0.95rem; outline: none; transition: border-color 0.3s;" 
+                       disabled="@IsProcessing" />
             </div>
             <div class="btn-group">
                 <button class="btn-secondary-custom" @onclick="CargarDatosAsync" disabled="@IsProcessing">
@@ -103,17 +103,17 @@
                             </td>
                         </tr>
                     }
-                    else if (!Solicitudes.Any())
+                    else if (!FilteredSolicitudes.Any())
                     {
                         <tr>
                             <td colspan="11" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
-                                No se encontraron firmas encoladas en estado 100 con biometría en estado 70.
+                                No se encontraron firmas con esos criterios.
                             </td>
                         </tr>
                     }
                     else
                     {
-                        @foreach (var item in Solicitudes)
+                        @foreach (var item in FilteredSolicitudes)
                         {
                             <tr class="@(item.IsSelected ? "selected-row" : "")">
                                 <td style="text-align: center;">

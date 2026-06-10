@@ -9,3 +9,4 @@ C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Domain\obj\Debug\net
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Domain\obj\Debug\net10.0\refint\FinandinaMonitor.Domain.dll
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Domain\obj\Debug\net10.0\FinandinaMonitor.Domain.pdb
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Domain\obj\Debug\net10.0\ref\FinandinaMonitor.Domain.dll
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Domain\obj\Debug\net10.0\FinandinaMonitor.Domain.sourcelink.json

@@ -44,5 +44,23 @@ namespace FinandinaMonitor.Infrastructure.Data
             using IDbConnection db = new SqlConnection(_connectionString);
             return await db.QueryAsync<SolicitudFirma>(sql, new { EstadoFirma = estadoFirma, EstadoBiometria = estadoBiometria });
         }
+
+        public async Task<int> GetCountExitosasHoyAsync(System.DateTime fechaInicio, System.DateTime fechaFin, int estadoFirma = 1000, int estadoBiometria = 70)
+        {
+            string sql = @"
+    SELECT COUNT(*) 
+    FROM [MotorFirma].PendienteFirma.Solicitudes AS t2
+    WHERE t2.IdEstadoBiometria = @EstadoBiometria
+      AND t2.IdEstadoFirma = @EstadoFirma
+      AND CAST(t2.FechaModificacion AS DATE) BETWEEN @FechaInicio AND @FechaFin";
+
+            using IDbConnection db = new SqlConnection(_connectionString);
+            return await db.ExecuteScalarAsync<int>(sql, new { 
+                EstadoFirma = estadoFirma, 
+                EstadoBiometria = estadoBiometria,
+                FechaInicio = fechaInicio,
+                FechaFin = fechaFin
+            });
+        }
     }
 }

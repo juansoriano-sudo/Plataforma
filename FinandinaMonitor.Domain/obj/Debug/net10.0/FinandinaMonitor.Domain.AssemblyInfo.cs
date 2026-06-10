@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("FinandinaMonitor.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1c0d0d0eb43e76ab4eaaa0093e76aa37503faf3a")]
 [assembly: System.Reflection.AssemblyProductAttribute("FinandinaMonitor.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FinandinaMonitor.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

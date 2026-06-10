@@ -15,3 +15,4 @@ C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Infrastructure\obj\D
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Infrastructure\obj\Debug\net10.0\refint\FinandinaMonitor.Infrastructure.dll
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Infrastructure\obj\Debug\net10.0\FinandinaMonitor.Infrastructure.pdb
 C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Infrastructure\obj\Debug\net10.0\ref\FinandinaMonitor.Infrastructure.dll
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Infrastructure\obj\Debug\net10.0\FinandinaMonitor.Infrastructure.sourcelink.json
