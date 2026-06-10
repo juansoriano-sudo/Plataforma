@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FinandinaMonitor.Domain\FinandinaMonitor.Domain.csproj" />
+    <ProjectReference Include="..\FinandinaMonitor.Application\FinandinaMonitor.Application.csproj" />
+    <ProjectReference Include="..\FinandinaMonitor.Infrastructure\FinandinaMonitor.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.79" />
+    <PackageReference Include="MySqlConnector" Version="2.6.0" />
+  </ItemGroup>
+
+</Project>

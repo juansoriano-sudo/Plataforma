@@ -1,0 +1,171 @@
+@page "/"
+@rendermode InteractiveServer
+@namespace FinandinaMonitor.UI.Components.Pages
+@using FinandinaMonitor.Domain.Entities
+@inherits Microsoft.AspNetCore.Components.ComponentBase
+
+<div class="dashboard-container">
+    <!-- Brand Header -->
+    <header class="brand-header">
+        <div class="brand-title-group">
+            <h1>Banco Finandina</h1>
+            <p class="brand-subtitle">Panel de Monitoreo y Reproceso de Firmas / Biometrías</p>
+        </div>
+        <div class="header-actions">
+            <button class="theme-toggle" @onclick="ToggleTheme">
+                @(IsDarkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro")
+            </button>
+            <span class="badge-finandina">Servicio Interno</span>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(AlertMessage))
+    {
+        <div class="custom-alert @(IsAlertError ? "custom-alert-error" : "custom-alert-success")">
+            <span>@AlertMessage</span>
+            <button class="alert-close" @onclick="ClearAlert">×</button>
+        </div>
+    }
+
+    <!-- KPI Summary Section -->
+    <section class="kpi-grid">
+        <div class="kpi-card kpi-primary">
+            <span class="kpi-label">Total en Cola (BD)</span>
+            <span class="kpi-value">@Solicitudes.Count</span>
+        </div>
+        <div class="kpi-card kpi-success">
+            <span class="kpi-label">Seleccionados</span>
+            <span class="kpi-value">@SelectedCount</span>
+        </div>
+    </section>
+
+    <!-- Main Workspace -->
+    <div class="glass-card">
+        <div class="actions-panel">
+            <div class="selection-info">
+                @if (SelectedCount > 0)
+                {
+                    <span>Seleccionados: @SelectedCount</span>
+                }
+                else
+                {
+                    @("Ningún registro seleccionado")
+                }
+            </div>
+            <div class="btn-group">
+                <button class="btn-secondary-custom" @onclick="CargarDatosAsync" disabled="@IsProcessing">
+                    Recargar
+                </button>
+                <button class="btn-primary-custom" @onclick="ReprocesarSeleccionadosAsync" disabled="@(SelectedCount == 0 || IsProcessing)">
+                    @if (IsProcessing)
+                    {
+                        <span>Procesando (@ProgressPercent%)...</span>
+                    }
+                    else
+                    {
+                        <span>Reprocesar Seleccionados</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- Loader Bar -->
+        <div class="loader-bar @(IsProcessing ? "active" : "")">
+            <div class="loader-progress" style="width: @(ProgressPercent)%"></div>
+        </div>
+
+        <!-- Grid Table -->
+        <div class="table-responsive">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th style="width: 45px; text-align: center;">
+                            <input type="checkbox" class="custom-checkbox" @onchange="ToggleSelectAll" checked="@IsAllSelected" disabled="@IsProcessing" />
+                        </th>
+                        <th>ID Solicitud</th>
+                        <th>Rad Number</th>
+                        <th>Monto Aprobado</th>
+                        <th>Fecha Creación</th>
+                        <th>Última Modificación</th>
+                        <th>Firma (100)</th>
+                        <th>Biometría (70)</th>
+                        <th>Observación</th>
+                        <th>Estado de Reproceso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (IsLoading)
+                    {
+                        <tr>
+                            <td colspan="11" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                <div style="margin-bottom: 1rem;">Conectando a base de datos [MotorFirma]...</div>
+                                <div style="display:inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.1); border-radius: 50%; border-top-color: var(--primary-red); animation: spin 1s ease infinite;"></div>
+                            </td>
+                        </tr>
+                    }
+                    else if (!Solicitudes.Any())
+                    {
+                        <tr>
+                            <td colspan="11" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                No se encontraron firmas encoladas en estado 100 con biometría en estado 70.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Solicitudes)
+                        {
+                            <tr class="@(item.IsSelected ? "selected-row" : "")">
+                                <td style="text-align: center;">
+                                    <input type="checkbox" class="custom-checkbox" 
+                                           @bind="item.IsSelected" 
+                                           disabled="@IsProcessing" />
+                                </td>
+                                <td style="font-weight: 600;">@item.Solicitud.IdSolicitud</td>
+                                <td style="color: var(--text-secondary); font-family: monospace;">@item.Solicitud.RadNumber</td>
+                                <td style="font-weight: 500;">@item.Solicitud.MontoAprobado.ToString("C0")</td>
+                                <td>@item.Solicitud.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@item.Solicitud.FechaModificacion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    <span class="status-pill pill-firma">@item.Solicitud.IdEstadoFirma</span>
+                                </td>
+                                <td>
+                                    <span class="status-pill pill-biometria">@item.Solicitud.IdEstadoBiometria</span>
+                                </td>
+                                <td>
+                                    <div style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@(item.Solicitud.Observacion ?? item.Solicitud.Descripcion)">
+                                        @(item.Solicitud.Observacion ?? item.Solicitud.Descripcion ?? "-")
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (string.IsNullOrEmpty(item.EstadoReproceso))
+                                    {
+                                        <span class="status-pending">-</span>
+                                    }
+                                    else if (item.EstadoReproceso.Contains("Consultando") || item.EstadoReproceso.Contains("Enviando"))
+                                    {
+                                        <span class="status-working">@item.EstadoReproceso</span>
+                                    }
+                                    else if (item.EstadoReproceso == "Éxito")
+                                    {
+                                        <span class="status-success">✔ @item.EstadoReproceso</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-error">❌ @item.EstadoReproceso</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
