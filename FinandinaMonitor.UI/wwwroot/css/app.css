@@ -16,7 +16,7 @@
     --text-muted: #94a3b8;
     --table-header-bg: #f1f5f9;
     --table-row-hover: #f8fafc;
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: none;
 }
 
 /* Dark Mode overrides */
@@ -37,7 +37,6 @@ body {
     font-family: 'Outfit', sans-serif;
     background-color: var(--bg-main);
     color: var(--text-primary);
-    transition: background-color 0.3s, color 0.3s;
     min-height: 100vh;
 }
 
@@ -55,7 +54,6 @@ body {
     padding: 2rem;
     box-shadow: 0 4px 20px rgba(0,0,0,0.05);
     margin-bottom: 2rem;
-    transition: background-color 0.3s, border-color 0.3s;
 }
 [data-theme='dark'] .glass-card {
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
@@ -347,4 +345,64 @@ body {
 .status-working {
     color: var(--primary-red);
     font-weight: 600;
+}
+
+/* Tabs Container */
+.tabs-container {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--card-border);
+}
+.tab-btn {
+    background: transparent;
+    border: none;
+    padding: 1rem 2rem;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+}
+.tab-btn.active {
+    color: var(--primary-red);
+    border-bottom-color: var(--primary-red);
+}
+
+/* Responsive for TVs and very large screens */
+@media (min-width: 1900px) {
+    .dashboard-container {
+        max-width: 1800px;
+        padding: 3.5rem 2.5rem;
+    }
+    
+    .kpi-label {
+        font-size: 1.5rem;
+    }
+    
+    .kpi-value {
+        font-size: 4rem;
+    }
+
+    .brand-title-group h1 {
+        font-size: 3rem;
+    }
+
+    .brand-subtitle {
+        font-size: 1.25rem;
+    }
+
+    .custom-table th {
+        font-size: 1.1rem;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .custom-table td {
+        font-size: 1.2rem;
+        padding: 1.25rem 1.5rem;
+    }
+    
+    .tab-btn {
+        font-size: 1.25rem;
+    }
 }

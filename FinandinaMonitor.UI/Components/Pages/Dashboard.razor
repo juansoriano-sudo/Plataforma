@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @namespace FinandinaMonitor.UI.Components.Pages
 @using FinandinaMonitor.Domain.Entities
+@implements IDisposable
 @inherits Microsoft.AspNetCore.Components.ComponentBase
 
 <div class="dashboard-container">
@@ -31,7 +32,7 @@
     <section class="kpi-grid">
         <div class="kpi-card kpi-primary">
             <span class="kpi-label">Total en Cola (BD)</span>
-            <span class="kpi-value">@Solicitudes.Count</span>
+            <span class="kpi-value">@Solicitudes100_70.Count</span>
         </div>
         <div class="kpi-card kpi-success">
             <span class="kpi-label">Firmas Exitosas Hoy</span>
@@ -43,13 +44,19 @@
         </div>
     </section>
 
+    <!-- Tabs -->
+    <div class="tabs-container">
+        <button class="tab-btn @(ActiveTab == 1 ? "active" : "")" @onclick="() => SetTab(1)">PENDIENTES</button>
+        <button class="tab-btn @(ActiveTab == 2 ? "active" : "")" @onclick="() => SetTab(2)">EXITOSAS</button>
+    </div>
+
     <!-- Main Workspace -->
     <div class="glass-card">
         <div class="actions-panel" style="gap: 1.5rem; flex-wrap: wrap;">
             <div class="search-box" style="flex: 1; min-width: 280px;">
                 <input type="text" @bind="SearchTerm" @bind:event="oninput" 
                        placeholder="Buscar por ID, Radicado o Documento..." 
-                       style="width: 90%; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; font-size: 0.95rem; outline: none; transition: border-color 0.3s;" 
+                       style="width: 90%; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; font-size: 0.95rem; outline: none;" 
                        disabled="@IsProcessing" />
             </div>
             <div class="btn-group">
@@ -87,7 +94,7 @@
                         <th>Monto Aprobado</th>
                         <th>Fecha Creación</th>
                         <th>Última Modificación</th>
-                        <th>Firma (100)</th>
+                        <th>Firma (@(ActiveTab == 1 ? "100" : "1000"))</th>
                         <th>Biometría (70)</th>
                         <th>Observación</th>
                         <th>Estado de Reproceso</th>
@@ -99,7 +106,7 @@
                         <tr>
                             <td colspan="11" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
                                 <div style="margin-bottom: 1rem;">Conectando a base de datos [MotorFirma]...</div>
-                                <div style="display:inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.1); border-radius: 50%; border-top-color: var(--primary-red); animation: spin 1s ease infinite;"></div>
+                                <div style="display:inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.1); border-radius: 50%; border-top-color: var(--primary-red);"></div>
                             </td>
                         </tr>
                     }
@@ -163,9 +170,3 @@
         </div>
     </div>
 </div>
-
-<style>
-    @@keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-</style>

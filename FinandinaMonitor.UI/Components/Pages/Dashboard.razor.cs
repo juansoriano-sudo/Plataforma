@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -17,7 +18,7 @@ namespace FinandinaMonitor.UI.Components.Pages
         public string EstadoReproceso { get; set; } = string.Empty;
     }
 
-    public partial class Dashboard : ComponentBase
+    public partial class Dashboard : ComponentBase, IDisposable
     {
         [Inject]
         public ReprocesoApplicationService ReprocesoService { get; set; } = default!;
@@ -31,12 +32,19 @@ namespace FinandinaMonitor.UI.Components.Pages
         [Inject]
         public IJSRuntime JSRuntime { get; set; } = default!;
 
-        protected List<SolicitudItemViewModel> Solicitudes { get; set; } = new();
+        private Timer? _refreshTimer;
+
+        protected List<SolicitudItemViewModel> Solicitudes100_70 { get; set; } = new();
+        protected List<SolicitudItemViewModel> Solicitudes1000_70 { get; set; } = new();
+
+        protected int ActiveTab { get; set; } = 1;
+
+        protected List<SolicitudItemViewModel> CurrentSolicitudes => ActiveTab == 1 ? Solicitudes100_70 : Solicitudes1000_70;
 
         protected IEnumerable<SolicitudItemViewModel> FilteredSolicitudes =>
             string.IsNullOrWhiteSpace(SearchTerm) 
-                ? Solicitudes 
-                : Solicitudes.Where(s => 
+                ? CurrentSolicitudes 
+                : CurrentSolicitudes.Where(s => 
                     s.Solicitud.IdSolicitud.ToString().Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
                     (s.Solicitud.RadNumber != null && s.Solicitud.RadNumber.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
                     (s.Solicitud.NumeroDocumento != null && s.Solicitud.NumeroDocumento.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)));
@@ -48,16 +56,46 @@ namespace FinandinaMonitor.UI.Components.Pages
         protected int ProgressPercent { get; set; } = 0;
         protected string AlertMessage { get; set; } = "";
         protected bool IsAlertError { get; set; } = false;
-        protected bool IsDarkMode { get; set; } = false;
+        protected bool IsDarkMode { get; set; } = true;
         
         protected int ExitosasHoyCount { get; set; } = 0;
 
-        protected int SelectedCount => Solicitudes.Count(s => s.IsSelected);
+        protected int SelectedCount => CurrentSolicitudes.Count(s => s.IsSelected);
         protected bool IsAllSelected => FilteredSolicitudes.Any() && FilteredSolicitudes.All(s => s.IsSelected);
 
         protected override async Task OnInitializedAsync()
         {
             await CargarDatosAsync();
+            _refreshTimer = new Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (!IsProcessing)
+                    {
+                        await CargarDatosAsync();
+                    }
+                });
+            }, null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));
+        }
+
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (firstRender)
+            {
+                await JSRuntime.InvokeVoidAsync("document.documentElement.setAttribute", "data-theme", "dark");
+            }
+        }
+
+        public void Dispose()
+        {
+            _refreshTimer?.Dispose();
+        }
+
+        protected async Task SetTab(int tabIndex)
+        {
+            ActiveTab = tabIndex;
+            SearchTerm = "";
+            await InvokeAsync(StateHasChanged);
         }
 
         protected async Task ToggleTheme()
@@ -71,12 +109,21 @@ namespace FinandinaMonitor.UI.Components.Pages
         {
             IsLoading = true;
             AlertMessage = "";
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
 
             try
             {
-                var result = await ReprocesoService.ObtenerPendientesAsync(estadoFirma: 100, estadoBiometria: 70);
-                Solicitudes = result.Select(s => new SolicitudItemViewModel
+                var result100 = await ReprocesoService.ObtenerPendientesAsync(estadoFirma: 100, estadoBiometria: 70);
+                var result1000 = await ReprocesoService.ObtenerPendientesAsync(estadoFirma: 1000, estadoBiometria: 70);
+
+                Solicitudes100_70 = result100.Select(s => new SolicitudItemViewModel
+                {
+                    Solicitud = s,
+                    IsSelected = false,
+                    EstadoReproceso = string.Empty
+                }).ToList();
+
+                Solicitudes1000_70 = result1000.Select(s => new SolicitudItemViewModel
                 {
                     Solicitud = s,
                     IsSelected = false,
@@ -89,12 +136,13 @@ namespace FinandinaMonitor.UI.Components.Pages
             {
                 AlertMessage = $"Error al cargar datos de SQL Server: {ex.Message}";
                 IsAlertError = true;
-                Solicitudes.Clear();
+                Solicitudes100_70.Clear();
+                Solicitudes1000_70.Clear();
             }
             finally
             {
                 IsLoading = false;
-                StateHasChanged();
+                await InvokeAsync(StateHasChanged);
             }
         }
 
@@ -109,7 +157,7 @@ namespace FinandinaMonitor.UI.Components.Pages
 
         protected async Task ReprocesarSeleccionadosAsync()
         {
-            var selectedItems = Solicitudes.Where(s => s.IsSelected).ToList();
+            var selectedItems = CurrentSolicitudes.Where(s => s.IsSelected).ToList();
             if (!selectedItems.Any() || IsProcessing) return;
 
             IsProcessing = true;
@@ -182,8 +230,6 @@ namespace FinandinaMonitor.UI.Components.Pages
                 procesados++;
                 ProgressPercent = (int)((double)procesados / total * 100);
                 StateHasChanged();
-                
-                await Task.Delay(50);
             }
 
             IsProcessing = false;
