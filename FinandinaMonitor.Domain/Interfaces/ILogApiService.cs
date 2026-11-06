@@ -6,5 +6,6 @@ namespace FinandinaMonitor.Domain.Interfaces
     {
         Task<(bool IsConnected, string Message)> CheckHealthAsync();
         Task<(bool Success, string? Adicional, string? ErrorMessage)> GetAdicionalAsync(long idSolicitud);
+        Task<(bool Success, string? Adicional, string? ErrorMessage)> GetAdicionalInicioFirmaAsync(long idSolicitud);
     }
 }

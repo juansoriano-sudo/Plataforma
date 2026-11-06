@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @namespace FinandinaMonitor.UI.Components.Pages
 @using FinandinaMonitor.Domain.Entities
+@using FinandinaMonitor.Domain.Enums
 @implements IDisposable
 @inherits Microsoft.AspNetCore.Components.ComponentBase
 
@@ -39,32 +40,81 @@
             <span class="kpi-value">@ExitosasHoyCount</span>
         </div>
         <div class="kpi-card kpi-primary" style="border-left-color: var(--text-muted)">
-            <span class="kpi-label">Fila(s) Seleccionada(s)</span>
+            <span class="kpi-label">Fuera de Línea</span>
+            <span class="kpi-value">@Solicitudes2000.Count</span>
+        </div>
+        <div class="kpi-card kpi-primary" style="border-left-color: var(--text-muted)">
+            <span class="kpi-label">Fila(s) Seleccionada(s) (máx. @MaxReprocesoSimultaneo)</span>
             <span class="kpi-value">@SelectedCount</span>
         </div>
+        @foreach (var origen in TotalEnColaPorOrigen)
+        {
+            <div class="kpi-card kpi-primary" style="border-left-color: var(--text-muted)">
+                <span class="kpi-label">En Cola · @origen.Nombre</span>
+                <span class="kpi-value">@origen.Total</span>
+            </div>
+        }
     </section>
+
+    @if (AlertasActivas.Any())
+    {
+        <h3 class="kpi-alertas-titulo">Alertas Temporales</h3>
+        <section class="alertas-grid">
+            @foreach (var alerta in AlertasActivas)
+            {
+                <div class="kpi-card kpi-card-alerta @(alerta.Disparada ? "kpi-error" : "kpi-primary")">
+                    <div class="kpi-card-alerta-header">
+                        <span class="kpi-label">@(string.IsNullOrEmpty(alerta.Descripcion) ? alerta.Termino : alerta.Descripcion)</span>
+                        <button class="btn-editar-alerta" title="Editar alerta" @onclick="() => AbrirModalEditarAlerta(alerta)">✎</button>
+                    </div>
+                    <span class="kpi-value">@alerta.UltimoConteo</span>
+                    <span class="kpi-card-alerta-umbral">Umbral (Cantidad): @alerta.Umbral</span>
+                </div>
+            }
+        </section>
+    }
 
     <!-- Tabs -->
     <div class="tabs-container">
         <button class="tab-btn @(ActiveTab == 1 ? "active" : "")" @onclick="() => SetTab(1)">PENDIENTES</button>
         <button class="tab-btn @(ActiveTab == 2 ? "active" : "")" @onclick="() => SetTab(2)">EXITOSAS</button>
+        <button class="tab-btn @(ActiveTab == 3 ? "active" : "")" @onclick="() => SetTab(3)">FUERA DE LÍNEA</button>
+        <button class="tab-btn @(ActiveTab == 4 ? "active" : "")" @onclick="() => SetTab(4)">BUSCADOR</button>
+        <button class="tab-btn @(ActiveTab == 5 ? "active" : "")" @onclick="() => SetTab(5)">HISTÓRICO</button>
+        @foreach (var alerta in AlertasActivas)
+        {
+            <button class="tab-btn @(ActiveAlertaId == alerta.Id ? "active" : "") @(alerta.Disparada ? "tab-alerta-disparada" : "")"
+                    @onclick="() => SeleccionarTabAlertaAsync(alerta.Id)">
+                ⚠ @(string.IsNullOrEmpty(alerta.Descripcion) ? alerta.Termino : alerta.Descripcion)
+            </button>
+        }
     </div>
 
     <!-- Main Workspace -->
     <div class="glass-card">
-        <div class="actions-panel" style="gap: 1.5rem; flex-wrap: wrap;">
-            <div class="search-box" style="flex: 1; min-width: 280px;">
-                <input type="text" @bind="SearchTerm" @bind:event="oninput" 
-                       placeholder="Buscar por ID, Radicado o Documento..." 
-                       style="width: 90%; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; font-size: 0.95rem; outline: none;" 
-                       disabled="@IsProcessing" />
-            </div>
+      @if (ActiveAlertaId.HasValue && AlertaSeleccionada is not null)
+      {
+        <div class="actions-panel" style="gap: 1rem; flex-wrap: wrap; align-items: center;">
+            <span style="color: var(--text-secondary);">
+                Alerta temporal: <strong>@(string.IsNullOrEmpty(AlertaSeleccionada.Descripcion) ? AlertaSeleccionada.Termino : AlertaSeleccionada.Descripcion)</strong>
+                · Umbral @AlertaSeleccionada.Umbral · Conteo actual @AlertaSeleccionada.UltimoConteo
+                · Expira @AlertaSeleccionada.FechaExpiracion.ToString("dd/MM/yyyy HH:mm:ss")
+            </span>
+            @if (AlertaSeleccionada.Disparada)
+            {
+                <span class="status-error">⚠ Disparada</span>
+            }
+            else
+            {
+                <span class="status-working">Vigilando...</span>
+            }
             <div class="btn-group">
-                <button class="btn-secondary-custom" @onclick="CargarDatosAsync" disabled="@IsProcessing">
-                    Recargar
+                <button class="btn-secondary-custom" @onclick="() => CargarDesgloceAlertaAsync(AlertaSeleccionada)" disabled="@IsCargandoDesglose">
+                    @(IsCargandoDesglose ? "Actualizando..." : "Actualizar Desglose")
                 </button>
+                <button class="btn-secondary-custom" @onclick="() => AbrirModalEditarAlerta(AlertaSeleccionada)">Editar Alerta</button>
                 <button class="btn-primary-custom" @onclick="ReprocesarSeleccionadosAsync" disabled="@(SelectedCount == 0 || IsProcessing)">
-                    @if (IsProcessing)
+                    @if (IsProcessing && !IsProcessingAvanzado)
                     {
                         <span>Procesando (@ProgressPercent%)...</span>
                     }
@@ -73,8 +123,391 @@
                         <span>Reprocesar Seleccionados</span>
                     }
                 </button>
+                <button class="btn-primary-custom" title="ReprocessCases → Signature/Save (con reintento vía UpdateState si falla)"
+                         @onclick="AbrirModalConfirmacionBorrado" disabled="@(SelectedCount == 0 || IsProcessing)">
+                    @if (IsProcessingAvanzado)
+                    {
+                        <span>Procesando (@ProgressPercent%)...</span>
+                    }
+                    else
+                    {
+                        <span>Borrar Documentos</span>
+                    }
+                </button>
+                <button class="btn-secondary-custom" @onclick="() => AbrirModalConfirmacionDetenerAlerta(ActiveAlertaId!.Value, AlertaSeleccionada!.Descripcion)">Detener Alerta</button>
             </div>
         </div>
+
+        <!-- Loader Bar -->
+        <div class="loader-bar @(IsProcessing ? "active" : "")">
+            <div class="loader-progress" style="width: @(ProgressPercent)%"></div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th style="width: 45px; text-align: center;">
+                            <input type="checkbox" class="custom-checkbox" @onchange="ToggleSelectAll" checked="@IsAllSelected" disabled="@IsProcessing" />
+                        </th>
+                        <th>ID Solicitud</th>
+                        <th>Origen</th>
+                        <th>Rad Number</th>
+                        <th>Monto Aprobado</th>
+                        <th>Fecha Creación</th>
+                        <th>Última Modificación</th>
+                        <th>Firma</th>
+                        <th>Biometría</th>
+                        <th>Observación</th>
+                        <th>Estado de Reproceso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (IsCargandoDesglose)
+                    {
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                Cargando desglose de la alerta...
+                            </td>
+                        </tr>
+                    }
+                    else if (!DesgloceAlertaActual.Any())
+                    {
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                No hay solicitudes que cumplan esta métrica en este momento.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in DesgloceAlertaActual)
+                        {
+                            <tr class="@(item.IsSelected ? "selected-row" : "")">
+                                <td style="text-align: center;">
+                                    <input type="checkbox" class="custom-checkbox"
+                                           checked="@item.IsSelected"
+                                           @onchange="e => ToggleSelectItem(item, e)"
+                                           disabled="@(IsProcessing || (!item.IsSelected && SelectedCount >= MaxReprocesoSimultaneo))" />
+                                </td>
+                                <td style="font-weight: 600;">@item.Solicitud.IdSolicitud</td>
+                                <td><span class="status-pill">@OrigenSolicitudCatalogo.ObtenerNombre(item.Solicitud.Origen)</span></td>
+                                <td style="color: var(--text-secondary); font-family: monospace;">@item.Solicitud.RadNumber</td>
+                                <td style="font-weight: 500;">@item.Solicitud.MontoAprobado.ToString("C0")</td>
+                                <td>@item.Solicitud.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@item.Solicitud.FechaModificacion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td><span class="status-pill pill-firma">@item.Solicitud.IdEstadoFirma</span></td>
+                                <td><span class="status-pill pill-biometria">@item.Solicitud.IdEstadoBiometria</span></td>
+                                <td>
+                                    <div style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@(item.Solicitud.Observacion ?? item.Solicitud.Descripcion)">
+                                        @(item.Solicitud.Observacion ?? item.Solicitud.Descripcion ?? "-")
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (string.IsNullOrEmpty(item.EstadoReproceso))
+                                    {
+                                        <span class="status-pending">-</span>
+                                    }
+                                    else if (item.EstadoReproceso.Contains("Consultando") || item.EstadoReproceso.Contains("Enviando"))
+                                    {
+                                        <span class="status-working">@item.EstadoReproceso</span>
+                                    }
+                                    else if (item.EstadoReproceso == "Éxito")
+                                    {
+                                        <span class="status-success">✔ @item.EstadoReproceso</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-error">❌ @item.EstadoReproceso</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+      }
+      else if (ActiveTab == 5)
+      {
+        <div class="table-responsive">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>ID Solicitud</th>
+                        <th>Tipo</th>
+                        <th>Rad Number</th>
+                        <th>Estado al Reprocesar</th>
+                        <th>Fecha Reproceso</th>
+                        <th>Estado Verificado</th>
+                        <th>Fecha Verificación</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Historico.Any())
+                    {
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                Aún no se han reprocesado firmas en esta sesión.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var h in Historico)
+                        {
+                            <tr>
+                                <td style="font-weight: 600;">@h.IdSolicitud</td>
+                                <td>@h.TipoReproceso</td>
+                                <td style="color: var(--text-secondary); font-family: monospace;">@h.RadNumber</td>
+                                <td>
+                                    <span class="status-pill pill-firma">@h.EstadoFirmaInicial</span>
+                                    <span class="status-pill pill-biometria">@h.EstadoBiometriaInicial</span>
+                                </td>
+                                <td>@h.FechaReproceso.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td>
+                                    @if (h.Verificado)
+                                    {
+                                        <span class="status-pill pill-firma">@h.EstadoFirmaVerificado</span>
+                                        <span class="status-pill pill-biometria">@h.EstadoBiometriaVerificado</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pending">Pendiente (reintenta cada 5 seg, hasta 5 min)</span>
+                                    }
+                                </td>
+                                <td>@(h.FechaVerificacion.HasValue ? h.FechaVerificacion.Value.ToString("dd/MM/yyyy HH:mm:ss") : "-")</td>
+                                <td>
+                                    @if (!h.Verificado)
+                                    {
+                                        <span class="status-working">En espera de verificación</span>
+                                    }
+                                    else if (h.Avanzo == true)
+                                    {
+                                        <span class="status-success">✔ Avanzó con éxito (1000/70)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-error">❌ No avanzó</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+      }
+      else
+      {
+        <div class="actions-panel" style="gap: 1.5rem; flex-wrap: wrap;">
+            @if (ActiveTab != 4)
+            {
+                <div class="search-box" style="flex: 1; min-width: 280px;">
+                    <input type="text" @bind="SearchTerm" @bind:event="oninput"
+                           placeholder="Buscar por ID, Radicado o Documento..."
+                           style="width: 90%; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; font-size: 0.95rem; outline: none;"
+                           disabled="@IsProcessing" />
+                </div>
+            }
+            <div class="btn-group">
+                <button class="btn-secondary-custom" @onclick="CargarDatosAsync" disabled="@IsProcessing">
+                    Recargar
+                </button>
+                <button class="btn-primary-custom" @onclick="ReprocesarSeleccionadosAsync" disabled="@(SelectedCount == 0 || IsProcessing)">
+                    @if (IsProcessing && !IsProcessingAvanzado)
+                    {
+                        <span>Procesando (@ProgressPercent%)...</span>
+                    }
+                    else
+                    {
+                        <span>Reprocesar Seleccionados</span>
+                    }
+                </button>
+                @if (ActiveTab == 1 || ActiveTab == 2 || ActiveTab == 4)
+                {
+                    <button class="btn-primary-custom" title="ReprocessCases → Signature/Save (con reintento vía UpdateState si falla)"
+                             @onclick="AbrirModalConfirmacionBorrado" disabled="@(SelectedCount == 0 || IsProcessing)">
+                        @if (IsProcessingAvanzado)
+                        {
+                            <span>Procesando (@ProgressPercent%)...</span>
+                        }
+                        else
+                        {
+                            <span>Borrar Documentos</span>
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (ActiveTab == 1)
+        {
+            <div class="actions-panel" style="gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: -0.5rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="font-size: 0.8rem; color: var(--text-secondary);">Desde</label>
+                    <input type="date" @bind="FechaDesde" disabled="@IsProcessing"
+                           style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="font-size: 0.8rem; color: var(--text-secondary);">Hasta</label>
+                    <input type="date" @bind="FechaHasta" disabled="@IsProcessing"
+                           style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                </div>
+                <button class="btn-secondary-custom" style="margin-top: 1.25rem;" @onclick="LimpiarFiltroFechas" disabled="@IsProcessing">
+                    Limpiar Fechas
+                </button>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="font-size: 0.8rem; color: var(--text-secondary);">Origen</label>
+                    <select @onchange="OnOrigenChanged" disabled="@IsProcessing"
+                            style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;">
+                        <option value="">Todos</option>
+                        @foreach (var origen in OrigenesDisponibles)
+                        {
+                            <option value="@origen.Key" selected="@(SelectedOrigen == origen.Key)">@origen.Value</option>
+                        }
+                    </select>
+                </div>
+                @if (FechaDesde.HasValue || FechaHasta.HasValue || SelectedOrigen.HasValue)
+                {
+                    <div class="filtro-resultado-badge">
+                        <span class="filtro-resultado-label">Total en Cola (filtro aplicado)</span>
+                        <span class="filtro-resultado-value">@TotalEnColaRango</span>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (ActiveTab == 4)
+        {
+            <div class="actions-panel" style="gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: -0.5rem;">
+                <div class="search-box" style="flex: 1; min-width: 280px;">
+                    <input type="text" @bind="BusquedaTermino" @bind:event="oninput" @onkeyup="OnBusquedaKeyUp"
+                           placeholder="Buscar por ID Solicitud, Rad Number o Número de Documento..."
+                           style="width: 90%; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit; font-size: 0.95rem; outline: none;"
+                           disabled="@IsBuscando" />
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="font-size: 0.8rem; color: var(--text-secondary);">Código Estado Firma</label>
+                    <input type="number" list="estados-firma-sugeridos" placeholder="Ej: 100"
+                           value="@BusquedaEstadoFirma" @oninput="OnBusquedaEstadoFirmaInput" disabled="@IsBuscando"
+                           style="width: 140px; padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                    <datalist id="estados-firma-sugeridos">
+                        @foreach (var estado in EstadosFirmaDisponibles)
+                        {
+                            <option value="@estado.Key">@estado.Value</option>
+                        }
+                    </datalist>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="font-size: 0.8rem; color: var(--text-secondary);">Código Estado Biometría</label>
+                    <input type="number" list="estados-biometria-sugeridos" placeholder="Ej: 70"
+                           value="@BusquedaEstadoBiometria" @oninput="OnBusquedaEstadoBiometriaInput" disabled="@IsBuscando"
+                           style="width: 140px; padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                    <datalist id="estados-biometria-sugeridos">
+                        @foreach (var estado in EstadosBiometriaDisponibles)
+                        {
+                            <option value="@estado.Key">@estado.Value</option>
+                        }
+                    </datalist>
+                </div>
+                <button class="btn-primary-custom" style="margin-top: 1.25rem;" @onclick="EjecutarBusquedaAsync"
+                        disabled="@((string.IsNullOrWhiteSpace(BusquedaTermino) && !BusquedaEstadoFirma.HasValue && !BusquedaEstadoBiometria.HasValue) || IsBuscando)">
+                    @(IsBuscando ? "Buscando..." : "Buscar")
+                </button>
+                @if (!string.IsNullOrEmpty(BusquedaMensaje))
+                {
+                    <span style="color: var(--text-secondary);">@BusquedaMensaje</span>
+                }
+            </div>
+
+            @if (PuedeOfrecerAlerta || !string.IsNullOrEmpty(AlertaCreadaMensaje))
+            {
+                <div class="actions-panel" style="gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: -0.5rem;">
+                    @if (!string.IsNullOrEmpty(AlertaCreadaMensaje))
+                    {
+                        <span class="status-success">✔ @AlertaCreadaMensaje</span>
+                    }
+                    else if (!MostrarPanelAlerta)
+                    {
+                        <span style="color: var(--text-secondary);">¿Desea crear una alerta de monitoreo temporal para esta métrica (@(string.Join(" / ", new[] {
+                            BusquedaEstadoFirma.HasValue ? $"Firma {EstadoFirmaCatalogo.ObtenerNombre(BusquedaEstadoFirma.Value)}" : null,
+                            BusquedaEstadoBiometria.HasValue ? $"Biometría {EstadoBiometriaCatalogo.ObtenerNombre(BusquedaEstadoBiometria.Value)}" : null
+                        }.Where(s => s != null))))?</span>
+                        <button class="btn-primary-custom" @onclick="AbrirPanelAlerta">Sí, configurar alerta</button>
+                        <button class="btn-secondary-custom" @onclick="() => OfertaAlertaDescartada = true">No, gracias</button>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Umbral (Cantidad)</label>
+                            <input type="number" min="1" @bind="UmbralAlerta"
+                                   style="width: 100px; padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Duración</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="number" min="1" @bind="DuracionAlertaValor"
+                                       style="width: 90px; padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                                <select @bind="DuracionAlertaUnidad"
+                                        style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;">
+                                    <option value="min">Minutos</option>
+                                    <option value="hora">Horas</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn-primary-custom" style="margin-top: 1.25rem;" @onclick="ConfirmarCreacionAlertaAsync">Crear alerta</button>
+                        <button class="btn-secondary-custom" style="margin-top: 1.25rem;" @onclick="CancelarCreacionAlerta">Cancelar</button>
+                    }
+                </div>
+            }
+
+            @if (AlertasActivas.Any())
+            {
+                <div class="table-responsive" style="margin-top: 0.5rem;">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Métrica Vigilada</th>
+                                <th>Umbral</th>
+                                <th>Conteo Actual</th>
+                                <th>Creada</th>
+                                <th>Expira</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var alerta in AlertasActivas)
+                            {
+                                <tr>
+                                    <td>@(string.IsNullOrEmpty(alerta.Descripcion) ? alerta.Termino : alerta.Descripcion)</td>
+                                    <td>@alerta.Umbral</td>
+                                    <td>@alerta.UltimoConteo</td>
+                                    <td>@alerta.FechaCreacion.ToString("HH:mm:ss")</td>
+                                    <td>@alerta.FechaExpiracion.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                    <td>
+                                        @if (alerta.Disparada)
+                                        {
+                                            <span class="status-error">⚠ Disparada</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-working">Vigilando...</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn-secondary-custom" @onclick="() => AbrirModalEditarAlerta(alerta)">Editar</button>
+                                        <button class="btn-secondary-custom" @onclick="() => AbrirModalConfirmacionDetenerAlerta(alerta.Id, alerta.Descripcion)">Detener</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
 
         <!-- Loader Bar -->
         <div class="loader-bar @(IsProcessing ? "active" : "")">
@@ -90,12 +523,13 @@
                             <input type="checkbox" class="custom-checkbox" @onchange="ToggleSelectAll" checked="@IsAllSelected" disabled="@IsProcessing" />
                         </th>
                         <th>ID Solicitud</th>
+                        <th>Origen</th>
                         <th>Rad Number</th>
                         <th>Monto Aprobado</th>
                         <th>Fecha Creación</th>
                         <th>Última Modificación</th>
-                        <th>Firma (@(ActiveTab == 1 ? "100" : "1000"))</th>
-                        <th>Biometría (70)</th>
+                        <th>Firma (@(ActiveTab == 1 ? "100" : ActiveTab == 2 ? "1000" : "-"))</th>
+                        <th>Biometría (@(ActiveTab == 3 ? "2000" : ActiveTab == 4 ? "-" : "70"))</th>
                         <th>Observación</th>
                         <th>Estado de Reproceso</th>
                     </tr>
@@ -104,7 +538,7 @@
                     @if (IsLoading)
                     {
                         <tr>
-                            <td colspan="11" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                            <td colspan="12" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
                                 <div style="margin-bottom: 1rem;">Conectando a base de datos [MotorFirma]...</div>
                                 <div style="display:inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.1); border-radius: 50%; border-top-color: var(--primary-red);"></div>
                             </td>
@@ -113,8 +547,8 @@
                     else if (!FilteredSolicitudes.Any())
                     {
                         <tr>
-                            <td colspan="11" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
-                                No se encontraron firmas con esos criterios.
+                            <td colspan="12" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                @(ActiveTab == 4 ? "Ingrese un ID Solicitud, Rad Number o Documento y presione Buscar." : "No se encontraron firmas con esos criterios.")
                             </td>
                         </tr>
                     }
@@ -124,11 +558,35 @@
                         {
                             <tr class="@(item.IsSelected ? "selected-row" : "")">
                                 <td style="text-align: center;">
-                                    <input type="checkbox" class="custom-checkbox" 
-                                           @bind="item.IsSelected" 
-                                           disabled="@IsProcessing" />
+                                    <input type="checkbox" class="custom-checkbox"
+                                           checked="@item.IsSelected"
+                                           @onchange="e => ToggleSelectItem(item, e)"
+                                           disabled="@(IsProcessing || (!item.IsSelected && SelectedCount >= MaxReprocesoSimultaneo))" />
                                 </td>
                                 <td style="font-weight: 600;">@item.Solicitud.IdSolicitud</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <span class="status-pill">@OrigenSolicitudCatalogo.ObtenerNombre(item.Solicitud.Origen)</span>
+                                        <button type="button"
+                                                class="btn-copy-adicional @(AdicionalCopiado.Contains(item.Solicitud.IdSolicitud) ? "is-success" : "")"
+                                                title="Copiar Adicional (JSON) de MariaDB"
+                                                @onclick="() => CopiarAdicionalAsync(item)"
+                                                disabled="@CopiandoAdicional.Contains(item.Solicitud.IdSolicitud)">
+                                            @if (CopiandoAdicional.Contains(item.Solicitud.IdSolicitud))
+                                            {
+                                                <span>Copiando...</span>
+                                            }
+                                            else if (AdicionalCopiado.Contains(item.Solicitud.IdSolicitud))
+                                            {
+                                                <span>✔ Copiado</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Copiar</span>
+                                            }
+                                        </button>
+                                    </div>
+                                </td>
                                 <td style="color: var(--text-secondary); font-family: monospace;">@item.Solicitud.RadNumber</td>
                                 <td style="font-weight: 500;">@item.Solicitud.MontoAprobado.ToString("C0")</td>
                                 <td>@item.Solicitud.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
@@ -168,5 +626,89 @@
                 </tbody>
             </table>
         </div>
+      }
     </div>
+
+    @if (MostrarModalConfirmacionBorrado)
+    {
+        <div class="modal-overlay" @onclick="CerrarModalConfirmacionBorrado">
+            <div class="modal-box" @onclick:stopPropagation="true">
+                <h3 class="modal-title">Confirmar borrado de documentos</h3>
+                <p class="modal-body-text">
+                    Está a punto de borrar <strong>@SelectedCount</strong> solicitud(es) seleccionada(s).
+                    Esta acción ejecuta ReprocessCases → Signature/Save (con reintento vía UpdateState) y no se puede deshacer.
+                    ¿Desea continuar?
+                </p>
+                <div class="modal-actions">
+                    <button class="btn-secondary-custom" @onclick="CerrarModalConfirmacionBorrado">Cancelar</button>
+                    <button class="btn-primary-custom" @onclick="ConfirmarBorradoDocumentosAsync">Sí, borrar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (MostrarModalConfirmacionDetenerAlerta)
+    {
+        <div class="modal-overlay" @onclick="CerrarModalConfirmacionDetenerAlerta">
+            <div class="modal-box" @onclick:stopPropagation="true">
+                <h3 class="modal-title">Confirmar detener alerta</h3>
+                <p class="modal-body-text">
+                    Está a punto de detener la alerta temporal
+                    <strong>@(string.IsNullOrEmpty(AlertaPendienteDetenerDescripcion) ? "seleccionada" : AlertaPendienteDetenerDescripcion)</strong>.
+                    Dejará de vigilarse esta métrica y su pestaña se cerrará. ¿Desea continuar?
+                </p>
+                <div class="modal-actions">
+                    <button class="btn-secondary-custom" @onclick="CerrarModalConfirmacionDetenerAlerta">Cancelar</button>
+                    <button class="btn-primary-custom" @onclick="ConfirmarDetenerAlertaAsync">Sí, detener</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (MostrarModalEditarAlerta)
+    {
+        <div class="modal-overlay" @onclick="CerrarModalEditarAlerta">
+            <div class="modal-box" @onclick:stopPropagation="true">
+                <h3 class="modal-title">Editar alerta temporal</h3>
+                <div style="display: flex; flex-direction: column; gap: 1rem; margin: 1rem 0;">
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Código Estado Firma</label>
+                        <input type="number" value="@EditAlertaEstadoFirma" @oninput="OnEditAlertaEstadoFirmaInput"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Código Estado Biometría</label>
+                        <input type="number" value="@EditAlertaEstadoBiometria" @oninput="OnEditAlertaEstadoBiometriaInput"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Término (ID / Rad Number / Documento)</label>
+                        <input type="text" @bind="EditAlertaTermino"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Umbral (Cantidad)</label>
+                        <input type="number" min="1" @bind="EditAlertaUmbral"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Duración (desde la creación)</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="number" min="1" @bind="EditAlertaDuracionValor"
+                                   style="width: 90px; padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;" />
+                            <select @bind="EditAlertaDuracionUnidad"
+                                    style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary); font-family: inherit;">
+                                <option value="min">Minutos</option>
+                                <option value="hora">Horas</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary-custom" @onclick="CerrarModalEditarAlerta">Cancelar</button>
+                    <button class="btn-primary-custom" @onclick="ConfirmarEditarAlertaAsync">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>

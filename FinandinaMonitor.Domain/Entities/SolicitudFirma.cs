@@ -15,5 +15,7 @@ namespace FinandinaMonitor.Domain.Entities
         public string? NumeroDocumento { get; set; }
         public string? TipoDocumento { get; set; }
         public decimal MontoAprobado { get; set; }
+        public int Origen { get; set; }
+        public bool EsVentaCruzada { get; set; }
     }
 }

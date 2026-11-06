@@ -1,0 +1,20 @@
+services:
+  finandina-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: finandina-monitor:latest
+    container_name: finandina-monitor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # PENDIENTE: Integrated Security no funciona dentro del contenedor Linux.
+      # El DBA debe crear un login SQL Server dedicado (ver scripts/create-motorfirma-login.sql)
+      # y completar SQLSERVER_USER / SQLSERVER_PASSWORD en el .env antes de levantar el contenedor.
+      ConnectionStrings__FinandinaDb: "Server=192.168.118.53,61733;Database=MotorFirma;User Id=${SQLSERVER_USER};Password=${SQLSERVER_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
+      ConnectionStrings__MariaDbLogs: "Server=192.168.118.58;Port=3306;Database=LogMotorFirma;Uid=n8n_consultas;Pwd=${MARIADB_LOGS_PASSWORD};"
+      FirmaApi__BaseUrl: "https://10.240.1.117:4023"
+      ReprocessApi__BaseUrl: "https://10.240.1.117:4023"
+      SignatureApi__BaseUrl: "https://10.240.1.117:4022"

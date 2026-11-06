@@ -334,7 +334,8 @@
           "Dapper": "2.1.79",
           "FinandinaMonitor.Application": "1.0.0",
           "FinandinaMonitor.Domain": "1.0.0",
-          "Microsoft.Data.SqlClient": "5.2.0"
+          "Microsoft.Data.SqlClient": "5.2.0",
+          "MySqlConnector": "2.6.0"
         },
         "runtime": {
           "FinandinaMonitor.Infrastructure.dll": {

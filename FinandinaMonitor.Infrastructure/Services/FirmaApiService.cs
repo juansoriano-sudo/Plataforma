@@ -18,12 +18,12 @@ namespace FinandinaMonitor.Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<bool> ReprocesarSolicitudAsync(string adicionalJson)
+        public async Task<(bool Success, string? ErrorMessage)> ReprocesarSolicitudAsync(string adicionalJson)
         {
             try
             {
                 var client = _httpClientFactory.CreateClient("FirmaApiClient");
-                
+
                 // Enviar el string JSON directamente como StringContent
                 var content = new StringContent(adicionalJson, Encoding.UTF8, "application/json");
 
@@ -33,18 +33,18 @@ namespace FinandinaMonitor.Infrastructure.Services
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation("Reproceso exitoso mediante Swagger API.");
-                    return true;
+                    return (true, null);
                 }
 
                 var errorMsg = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Fallo en reproceso Swagger. Estado: {StatusCode}, Error: {Error}", 
+                _logger.LogWarning("Fallo en reproceso Swagger. Estado: {StatusCode}, Error: {Error}",
                     response.StatusCode, errorMsg);
-                return false;
+                return (false, $"HTTP {(int)response.StatusCode} {response.StatusCode}: {errorMsg}");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al consumir la API Swagger de reproceso.");
-                return false;
+                return (false, ex.Message);
             }
         }
     }

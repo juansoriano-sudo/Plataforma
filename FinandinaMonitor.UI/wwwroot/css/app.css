@@ -145,6 +145,63 @@ body {
     border-color: var(--text-muted);
 }
 
+.kpi-card-alerta:hover {
+    transform: none;
+    border-color: var(--card-border);
+}
+
+.kpi-alertas-titulo {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 0.75rem;
+}
+
+.alertas-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.alertas-grid .kpi-card-alerta {
+    flex: 0 1 220px;
+    max-width: 220px;
+    padding: 1rem 1.25rem;
+}
+
+.kpi-card-alerta-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.kpi-card-alerta-umbral {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.35rem;
+}
+
+.btn-editar-alerta {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--card-border);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    width: 1.75rem;
+    height: 1.75rem;
+    line-height: 1;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+.btn-editar-alerta:hover {
+    color: var(--primary-red);
+    border-color: var(--primary-red);
+}
+
 .kpi-card::before {
     content: '';
     position: absolute;
@@ -177,7 +234,14 @@ body {
     border-radius: 12px;
     border: 1px solid var(--card-border);
 }
-
+.custom-alert-success {
+    background-color: rgba(0, 200, 83, 0.15);
+    color: #00c853;
+    border: 1px solid rgba(0, 200, 83, 0.3);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
 .custom-table {
     width: 100%;
     border-collapse: collapse;
@@ -368,6 +432,9 @@ body {
     color: var(--primary-red);
     border-bottom-color: var(--primary-red);
 }
+.tab-btn.tab-alerta-disparada {
+    color: var(--error-red);
+}
 
 /* Responsive for TVs and very large screens */
 @media (min-width: 1900px) {
@@ -404,5 +471,117 @@ body {
     
     .tab-btn {
         font-size: 1.25rem;
+    }
+}
+
+/* Modal de confirmación "Borrar Documentos" */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.modal-box {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 1.75rem;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.modal-title {
+    margin: 0 0 0.75rem 0;
+    color: var(--text-primary);
+    font-size: 1.15rem;
+}
+
+.modal-body-text {
+    margin: 0 0 1.5rem 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    font-size: 0.95rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* Badge "Total en Cola (filtro aplicado)" */
+.filtro-resultado-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+}
+
+.filtro-resultado-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.filtro-resultado-value {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary-red);
+}
+
+/* Botón "Copiar Adicional" */
+.btn-copy-adicional {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.btn-copy-adicional:hover:not(:disabled) {
+    border-color: var(--primary-red);
+    color: var(--primary-red);
+}
+
+.btn-copy-adicional:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.btn-copy-adicional.is-success {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+    background: var(--accent-green-glow);
+    animation: copy-success-pop 0.35s ease;
+}
+
+@keyframes copy-success-pop {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(1.12);
+    }
+    100% {
+        transform: scale(1);
     }
 }

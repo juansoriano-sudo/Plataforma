@@ -18,7 +18,16 @@ builder.Services.AddRazorComponents()
 builder.Services.AddScoped<ISolicitudRepository, SolicitudRepository>();
 builder.Services.AddScoped<IFirmaApiService, FirmaApiService>();
 builder.Services.AddScoped<ILogApiService, LogApiService>();
+builder.Services.AddScoped<IReprocesoAvanzadoApiService, ReprocesoAvanzadoApiService>();
 builder.Services.AddScoped<ReprocesoApplicationService>();
+
+// Histórico de reprocesos: almacén en memoria compartido + verificación en segundo plano (5 min después)
+builder.Services.AddSingleton<IHistoricoReprocesoStore, HistoricoReprocesoStore>();
+builder.Services.AddHostedService<HistoricoVerificacionBackgroundService>();
+
+// Alertas de monitoreo temporales (Buscador): almacén en memoria compartido + evaluación en segundo plano
+builder.Services.AddSingleton<IAlertaMonitoreoStore, AlertaMonitoreoStore>();
+builder.Services.AddHostedService<AlertaMonitoreoBackgroundService>();
 
 // Configurar HttpClientFactory ignorando errores de certificados SSL autofirmados
 builder.Services.AddHttpClient("FirmaApiClient", client =>
@@ -31,10 +40,26 @@ builder.Services.AddHttpClient("FirmaApiClient", client =>
     ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
 });
 
-builder.Services.AddHttpClient("LogApiClient", client =>
+// API de Management (puerto 4023) usada para ReprocessCases
+builder.Services.AddHttpClient("ReprocessApiClient", client =>
 {
-    var baseUrl = builder.Configuration["LogApi:BaseUrl"] ?? "http://localhost:5005";
+    var baseUrl = builder.Configuration["ReprocessApi:BaseUrl"] ?? "https://10.240.1.117:4023";
     client.BaseAddress = new Uri(baseUrl);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+});
+
+// API de Signature (puerto 4022) usada para Save y UpdateState
+builder.Services.AddHttpClient("SignatureApiClient", client =>
+{
+    var baseUrl = builder.Configuration["SignatureApi:BaseUrl"] ?? "https://10.240.1.117:4022";
+    client.BaseAddress = new Uri(baseUrl);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
 });
 
 var app = builder.Build();

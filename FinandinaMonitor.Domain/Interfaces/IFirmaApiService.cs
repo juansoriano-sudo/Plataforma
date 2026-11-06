@@ -6,6 +6,6 @@ namespace FinandinaMonitor.Domain.Interfaces
 {
     public interface IFirmaApiService
     {
-        Task<bool> ReprocesarSolicitudAsync(string adicionalJson);
+        Task<(bool Success, string? ErrorMessage)> ReprocesarSolicitudAsync(string adicionalJson);
     }
 }

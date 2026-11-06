@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.git/
+**/.gitignore
+**/*.user
+mariadb_api.py
+Dockerfile
+docker-compose*.yml
+.dockerignore
