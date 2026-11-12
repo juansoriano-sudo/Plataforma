@@ -13,17 +13,32 @@ COPY FinandinaMonitor.Application/ FinandinaMonitor.Application/
 COPY FinandinaMonitor.Infrastructure/ FinandinaMonitor.Infrastructure/
 COPY FinandinaMonitor.UI/ FinandinaMonitor.UI/
 
-RUN dotnet publish FinandinaMonitor.UI/FinandinaMonitor.UI.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish FinandinaMonitor.UI/FinandinaMonitor.UI.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-RUN adduser --disabled-password --gecos "" appuser
-USER appuser
+# curl: usado por el HEALTHCHECK. tzdata: zona horaria America/Bogota.
+# gss-ntlmssp: permite autenticar con SQL Server por NTLM (Integrated Security) en Linux
+# mientras el DBA crea el login dedicado (ver scripts/create-motorfirma-login.sql y README).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl tzdata gss-ntlmssp \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV TZ=America/Bogota
+
+RUN mkdir -p /https \
+    && chown -R app:app /app /https
+USER app
 
 COPY --from=build /app/publish .
 
-ENV ASPNETCORE_URLS=http://+:8080
+# HTTPS directo en Kestrel (mismo certificado de desarrollo que ya usan los usuarios).
+# La ruta/clave del .pfx y NTLM_USER_FILE se inyectan vía docker-compose (env_file / volumes).
+ENV ASPNETCORE_URLS=https://+:8080
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -k -f https://localhost:8080/healthz || exit 1
 
 ENTRYPOINT ["dotnet", "FinandinaMonitor.UI.dll"]

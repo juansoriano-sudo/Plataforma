@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using FinandinaMonitor.Domain.Entities;
@@ -54,6 +56,27 @@ namespace FinandinaMonitor.UI.Components.Pages
 
         [Inject]
         public IJSRuntime JSRuntime { get; set; } = default!;
+
+        [Inject]
+        public IUsuarioRepository UsuarioRepository { get; set; } = default!;
+
+        [Inject]
+        public NavigationManager Navigation { get; set; } = default!;
+
+        [CascadingParameter]
+        private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+        protected ClaimsPrincipal CurrentUser { get; set; } = new();
+        protected bool EstaAutenticado => CurrentUser.Identity?.IsAuthenticated ?? false;
+        protected string? UsuarioActual => CurrentUser.Identity?.Name;
+        protected bool EsAdmin => EstaAutenticado && CurrentUser.HasClaim("EsAdmin", "True");
+        protected bool PuedeBorrar => EstaAutenticado && (EsAdmin || CurrentUser.HasClaim("PuedeBorrar", "True"));
+        protected bool PuedeReprocesar => EstaAutenticado && (EsAdmin || CurrentUser.HasClaim("PuedeReprocesar", "True"));
+        protected bool PuedeVerCompleto => EstaAutenticado && (EsAdmin || CurrentUser.HasClaim("PuedeVerCompleto", "True"));
+        protected bool ModoResumen => !PuedeVerCompleto;
+
+        protected bool MostrarModalLogin { get; set; }
+        protected string? LoginError { get; set; }
 
         private Timer? _refreshTimer;
         private Timer? _alertaRefreshTimer;
@@ -108,6 +131,28 @@ namespace FinandinaMonitor.UI.Components.Pages
             }
         }
 
+        protected const int TamanoPagina = 10;
+        protected int PaginaActual { get; set; } = 1;
+
+        protected int TotalPaginas => Math.Max(1, (int)Math.Ceiling(FilteredSolicitudes.Count() / (double)TamanoPagina));
+
+        protected IEnumerable<SolicitudItemViewModel> SolicitudesPaginadas
+        {
+            get
+            {
+                var totalPaginas = TotalPaginas;
+                if (PaginaActual > totalPaginas) PaginaActual = totalPaginas;
+                if (PaginaActual < 1) PaginaActual = 1;
+
+                return FilteredSolicitudes.Skip((PaginaActual - 1) * TamanoPagina).Take(TamanoPagina);
+            }
+        }
+
+        protected void IrAPagina(int pagina)
+        {
+            PaginaActual = Math.Clamp(pagina, 1, TotalPaginas);
+        }
+
         protected string SearchTerm { get; set; } = "";
 
         protected DateTime? FechaDesde { get; set; }
@@ -143,7 +188,7 @@ namespace FinandinaMonitor.UI.Components.Pages
         protected bool IsCargandoDesglose { get; set; } = false;
 
         protected bool PuedeOfrecerAlerta =>
-            ActiveTab == 4 && !IsBuscando && !OfertaAlertaDescartada &&
+            EstaAutenticado && ActiveTab == 4 && !IsBuscando && !OfertaAlertaDescartada &&
             (BusquedaEstadoFirma.HasValue || BusquedaEstadoBiometria.HasValue);
 
         protected int TotalEnColaRango => FilteredSolicitudes.Count();
@@ -168,12 +213,30 @@ namespace FinandinaMonitor.UI.Components.Pages
         protected bool IsDarkMode { get; set; } = true;
         
         protected int ExitosasHoyCount { get; set; } = 0;
+        protected DateTime? UltimaActualizacion { get; set; }
+
+        protected const int UmbralColaAlta = 10;
+        protected bool ColaAlta => Solicitudes100_70.Count > UmbralColaAlta;
 
         protected int SelectedCount => CurrentSolicitudes.Count(s => s.IsSelected);
         protected bool IsAllSelected => FilteredSolicitudes.Any() && FilteredSolicitudes.All(s => s.IsSelected);
 
         protected override async Task OnInitializedAsync()
         {
+            if (AuthStateTask is not null)
+            {
+                var authState = await AuthStateTask;
+                CurrentUser = authState.User;
+            }
+
+            var uri = new Uri(Navigation.Uri);
+            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+            if (query.TryGetValue("loginError", out var loginErrorValue) && loginErrorValue == "1")
+            {
+                LoginError = "Usuario o contraseña incorrectos.";
+                MostrarModalLogin = true;
+            }
+
             await CargarDatosAsync();
             _refreshTimer = new Timer(async _ =>
             {
@@ -209,6 +272,11 @@ namespace FinandinaMonitor.UI.Components.Pages
             {
                 await JSRuntime.InvokeVoidAsync("document.documentElement.setAttribute", "data-theme", "dark");
             }
+
+            if (!IsLoading && !ModoResumen && ActiveTab != 5 && !ActiveAlertaId.HasValue)
+            {
+                PrecargarBiometriaPaginaActual();
+            }
         }
 
         public void Dispose()
@@ -217,8 +285,162 @@ namespace FinandinaMonitor.UI.Components.Pages
             _alertaRefreshTimer?.Dispose();
         }
 
+        protected List<Usuario> Usuarios { get; set; } = new();
+        protected string NuevoUsuarioUsername { get; set; } = "";
+        protected string NuevoUsuarioPassword { get; set; } = "";
+        protected bool NuevoUsuarioEsAdmin { get; set; }
+        protected bool NuevoUsuarioPuedeBorrar { get; set; }
+        protected bool NuevoUsuarioPuedeReprocesar { get; set; }
+        protected bool NuevoUsuarioPuedeVerCompleto { get; set; }
+        protected string? UsuariosMensaje { get; set; }
+        protected bool UsuariosMensajeError { get; set; }
+
+        protected async Task CargarUsuariosAsync()
+        {
+            Usuarios = (await UsuarioRepository.ObtenerTodosAsync()).ToList();
+        }
+
+        protected async Task CrearUsuarioAsync()
+        {
+            UsuariosMensaje = null;
+
+            var username = NuevoUsuarioUsername.Trim();
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(NuevoUsuarioPassword))
+            {
+                UsuariosMensaje = "Usuario y contraseña son obligatorios.";
+                UsuariosMensajeError = true;
+                return;
+            }
+
+            if (await UsuarioRepository.ExisteUsernameAsync(username))
+            {
+                UsuariosMensaje = $"Ya existe un usuario '{username}'.";
+                UsuariosMensajeError = true;
+                return;
+            }
+
+            await UsuarioRepository.CrearAsync(username, NuevoUsuarioPassword, NuevoUsuarioEsAdmin, NuevoUsuarioPuedeBorrar, NuevoUsuarioPuedeReprocesar, NuevoUsuarioPuedeVerCompleto);
+
+            NuevoUsuarioUsername = "";
+            NuevoUsuarioPassword = "";
+            NuevoUsuarioEsAdmin = false;
+            NuevoUsuarioPuedeBorrar = false;
+            NuevoUsuarioPuedeReprocesar = false;
+            NuevoUsuarioPuedeVerCompleto = false;
+            UsuariosMensaje = $"Usuario '{username}' creado.";
+            UsuariosMensajeError = false;
+
+            await CargarUsuariosAsync();
+        }
+
+        protected async Task GuardarPermisosUsuarioAsync(Usuario usuario)
+        {
+            await UsuarioRepository.ActualizarPermisosAsync(usuario.Id, usuario.EsAdmin, usuario.PuedeBorrar, usuario.PuedeReprocesar, usuario.PuedeVerCompleto, usuario.Activo);
+            UsuariosMensaje = $"Permisos de '{usuario.Username}' actualizados.";
+            UsuariosMensajeError = false;
+        }
+
+        protected Dictionary<int, string> NuevaPasswordPorUsuario { get; } = new();
+
+        protected string ObtenerNuevaPassword(int usuarioId) =>
+            NuevaPasswordPorUsuario.TryGetValue(usuarioId, out var valor) ? valor : "";
+
+        protected void EstablecerNuevaPassword(int usuarioId, string valor) =>
+            NuevaPasswordPorUsuario[usuarioId] = valor;
+
+        protected async Task CambiarPasswordUsuarioAsync(Usuario usuario)
+        {
+            var nuevaPassword = ObtenerNuevaPassword(usuario.Id);
+            if (string.IsNullOrWhiteSpace(nuevaPassword))
+            {
+                UsuariosMensaje = "Escribe la nueva contraseña antes de guardarla.";
+                UsuariosMensajeError = true;
+                return;
+            }
+
+            await UsuarioRepository.CambiarPasswordAsync(usuario.Id, nuevaPassword);
+            NuevaPasswordPorUsuario.Remove(usuario.Id);
+            UsuariosMensaje = $"Contraseña de '{usuario.Username}' actualizada.";
+            UsuariosMensajeError = false;
+        }
+
+        protected bool MostrarModalCambiarPassword { get; set; }
+        protected string PasswordActual { get; set; } = "";
+        protected string PasswordNueva { get; set; } = "";
+        protected string PasswordConfirmar { get; set; } = "";
+        protected string? CambiarPasswordMensaje { get; set; }
+        protected bool CambiarPasswordMensajeError { get; set; }
+
+        protected void AbrirModalCambiarPassword()
+        {
+            PasswordActual = "";
+            PasswordNueva = "";
+            PasswordConfirmar = "";
+            CambiarPasswordMensaje = null;
+            MostrarModalCambiarPassword = true;
+        }
+
+        protected void CerrarModalCambiarPassword()
+        {
+            MostrarModalCambiarPassword = false;
+        }
+
+        protected async Task ConfirmarCambiarPasswordAsync()
+        {
+            CambiarPasswordMensaje = null;
+
+            if (string.IsNullOrWhiteSpace(PasswordNueva) || PasswordNueva != PasswordConfirmar)
+            {
+                CambiarPasswordMensaje = "La nueva contraseña y su confirmación no coinciden.";
+                CambiarPasswordMensajeError = true;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(UsuarioActual))
+            {
+                CambiarPasswordMensaje = "No se pudo identificar el usuario de la sesión.";
+                CambiarPasswordMensajeError = true;
+                return;
+            }
+
+            var usuario = await UsuarioRepository.ValidarCredencialesAsync(UsuarioActual, PasswordActual);
+            if (usuario is null)
+            {
+                CambiarPasswordMensaje = "La contraseña actual no es correcta.";
+                CambiarPasswordMensajeError = true;
+                return;
+            }
+
+            await UsuarioRepository.CambiarPasswordAsync(usuario.Id, PasswordNueva);
+            CambiarPasswordMensaje = "Contraseña actualizada correctamente.";
+            CambiarPasswordMensajeError = false;
+            PasswordActual = "";
+            PasswordNueva = "";
+            PasswordConfirmar = "";
+        }
+
+        protected void AbrirModalLogin()
+        {
+            LoginError = null;
+            MostrarModalLogin = true;
+        }
+
+        protected void CerrarModalLogin()
+        {
+            MostrarModalLogin = false;
+        }
+
+        protected bool PestanaPermitida(int tabIndex) => tabIndex switch
+        {
+            1 or 3 or 4 => true,
+            6 => EsAdmin,
+            _ => EstaAutenticado
+        };
+
         protected async Task SetTab(int tabIndex)
         {
+            if (!PestanaPermitida(tabIndex)) return;
+
             ActiveTab = tabIndex;
             ActiveAlertaId = null;
             DesgloceAlertaActual.Clear();
@@ -226,6 +448,7 @@ namespace FinandinaMonitor.UI.Components.Pages
             FechaDesde = null;
             FechaHasta = null;
             SelectedOrigen = null;
+            PaginaActual = 1;
             MostrarModalConfirmacionBorrado = false;
             BusquedaTermino = "";
             BusquedaEstadoFirma = null;
@@ -235,6 +458,13 @@ namespace FinandinaMonitor.UI.Components.Pages
             OfertaAlertaDescartada = false;
             AlertaCreadaMensaje = null;
             ResultadosBusqueda.Clear();
+
+            if (tabIndex == 6)
+            {
+                UsuariosMensaje = null;
+                await CargarUsuariosAsync();
+            }
+
             await InvokeAsync(StateHasChanged);
         }
 
@@ -250,6 +480,7 @@ namespace FinandinaMonitor.UI.Components.Pages
             MostrarPanelAlerta = false;
             OfertaAlertaDescartada = false;
             AlertaCreadaMensaje = null;
+            PaginaActual = 1;
             await InvokeAsync(StateHasChanged);
 
             try
@@ -535,17 +766,77 @@ namespace FinandinaMonitor.UI.Components.Pages
         {
             FechaDesde = null;
             FechaHasta = null;
+            PaginaActual = 1;
         }
 
         protected async Task OnOrigenChanged(ChangeEventArgs e)
         {
             var value = e.Value?.ToString();
             SelectedOrigen = string.IsNullOrEmpty(value) ? null : int.Parse(value);
+            PaginaActual = 1;
             await InvokeAsync(StateHasChanged);
         }
 
         protected HashSet<long> CopiandoAdicional { get; } = new();
         protected HashSet<long> AdicionalCopiado { get; } = new();
+
+        protected HashSet<long> CargandoBiometria { get; } = new();
+        protected HashSet<long> ExpandidoBiometria { get; } = new();
+        protected Dictionary<long, IntentoBiometricoResumen?> ResumenBiometriaPorSolicitud { get; } = new();
+
+        protected async Task ToggleBiometriaAsync(SolicitudItemViewModel item)
+        {
+            var idSolicitud = item.Solicitud.IdSolicitud;
+
+            if (ExpandidoBiometria.Contains(idSolicitud))
+            {
+                ExpandidoBiometria.Remove(idSolicitud);
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            ExpandidoBiometria.Add(idSolicitud);
+            await CargarBiometriaSiHaceFaltaAsync(idSolicitud);
+        }
+
+        /// <summary>
+        /// Carga (si no está ya en caché ni en curso) el resumen de biometría de una solicitud.
+        /// Se usa tanto al desplegar la fila como para precargar automáticamente las filas visibles.
+        /// </summary>
+        private async Task CargarBiometriaSiHaceFaltaAsync(long idSolicitud)
+        {
+            if (ResumenBiometriaPorSolicitud.ContainsKey(idSolicitud) || !CargandoBiometria.Add(idSolicitud))
+            {
+                return;
+            }
+
+            await InvokeAsync(StateHasChanged);
+
+            try
+            {
+                ResumenBiometriaPorSolicitud[idSolicitud] = await ReprocesoService.ObtenerResumenBiometriaAsync(idSolicitud);
+            }
+            catch (Exception)
+            {
+                ResumenBiometriaPorSolicitud.Remove(idSolicitud);
+            }
+            finally
+            {
+                CargandoBiometria.Remove(idSolicitud);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+
+        protected void PrecargarBiometriaPaginaActual()
+        {
+            foreach (var item in SolicitudesPaginadas)
+            {
+                if (!ResumenBiometriaPorSolicitud.ContainsKey(item.Solicitud.IdSolicitud) && !CargandoBiometria.Contains(item.Solicitud.IdSolicitud))
+                {
+                    _ = CargarBiometriaSiHaceFaltaAsync(item.Solicitud.IdSolicitud);
+                }
+            }
+        }
 
         protected async Task CopiarAdicionalAsync(SolicitudItemViewModel item)
         {
@@ -628,6 +919,7 @@ namespace FinandinaMonitor.UI.Components.Pages
                 }).ToList();
 
                 ExitosasHoyCount = await ReprocesoService.ObtenerCountExitosasHoyAsync();
+                UltimaActualizacion = HoraLocal.Ahora;
             }
             catch (Exception ex)
             {

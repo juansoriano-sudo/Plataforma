@@ -94,5 +94,6 @@ namespace FinandinaMonitor.Application.Services
                 .Where(i => !i.Verificado && (ahora - i.FechaReproceso) >= antiguedadMinima)
                 .ToList();
         }
+
     }
 }

@@ -172,6 +172,37 @@ body {
     padding: 1rem 1.25rem;
 }
 
+.monitor-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.9rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.monitor-banner-ok {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.monitor-banner-warning {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.monitor-banner-hora {
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
 .kpi-card-alerta-header {
     display: flex;
     align-items: flex-start;
@@ -364,6 +395,62 @@ body {
 .btn-secondary-custom:hover {
     background: var(--table-row-hover);
     border-color: var(--text-secondary);
+}
+
+.btn-toggle-biometria {
+    background: transparent;
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    line-height: 1;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.btn-toggle-biometria:hover {
+    background: var(--table-row-hover);
+    border-color: var(--text-secondary);
+}
+
+.biometria-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.biometria-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--bg-main);
+    font-size: 0.85rem;
+}
+
+.biometria-stat-total {
+    border-color: var(--primary-red);
+}
+
+.biometria-stat-label {
+    color: var(--text-secondary);
+}
+
+.biometria-stat-value {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.app-footer {
+    text-align: center;
+    padding: 1.5rem 0 0.5rem;
+    margin-top: 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
 }
 
 /* Status Badges */
