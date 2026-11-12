@@ -43,3 +43,5 @@ services:
       # invalida las sesiones/formularios abiertos de los usuarios.
       - ./data/dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
       - ./data/usuarios:/app/usuarios
+      # Actividad del monitor (login/logout, reprocesos, cambios de usuarios): un archivo por día.
+      - ./data/logs/actividad:/app/logs/actividad

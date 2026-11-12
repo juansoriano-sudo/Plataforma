@@ -34,6 +34,8 @@ namespace FinandinaMonitor.UI.Components.Pages
     public partial class Dashboard : ComponentBase, IDisposable
     {
         protected const int MaxReprocesoSimultaneo = 5;
+        protected static readonly TimeSpan EsperaEntreReprocesos = TimeSpan.FromSeconds(7);
+        protected static readonly TimeSpan VentanaAntiDuplicadoReproceso = TimeSpan.FromMinutes(3);
 
         protected IReadOnlyDictionary<int, string> OrigenesDisponibles => OrigenSolicitudCatalogo.Nombres;
         [Inject]
@@ -59,6 +61,12 @@ namespace FinandinaMonitor.UI.Components.Pages
 
         [Inject]
         public IUsuarioRepository UsuarioRepository { get; set; } = default!;
+
+        [Inject]
+        public IActividadLogger ActividadLogger { get; set; } = default!;
+
+        [Inject]
+        public IReprocesoLockService ReprocesoLockService { get; set; } = default!;
 
         [Inject]
         public NavigationManager Navigation { get; set; } = default!;
@@ -320,6 +328,7 @@ namespace FinandinaMonitor.UI.Components.Pages
             }
 
             await UsuarioRepository.CrearAsync(username, NuevoUsuarioPassword, NuevoUsuarioEsAdmin, NuevoUsuarioPuedeBorrar, NuevoUsuarioPuedeReprocesar, NuevoUsuarioPuedeVerCompleto);
+            await ActividadLogger.RegistrarAsync(UsuarioActual, "Usuario creado", $"Username={username} | EsAdmin={NuevoUsuarioEsAdmin} | PuedeBorrar={NuevoUsuarioPuedeBorrar} | PuedeReprocesar={NuevoUsuarioPuedeReprocesar} | PuedeVerCompleto={NuevoUsuarioPuedeVerCompleto}");
 
             NuevoUsuarioUsername = "";
             NuevoUsuarioPassword = "";
@@ -336,6 +345,7 @@ namespace FinandinaMonitor.UI.Components.Pages
         protected async Task GuardarPermisosUsuarioAsync(Usuario usuario)
         {
             await UsuarioRepository.ActualizarPermisosAsync(usuario.Id, usuario.EsAdmin, usuario.PuedeBorrar, usuario.PuedeReprocesar, usuario.PuedeVerCompleto, usuario.Activo);
+            await ActividadLogger.RegistrarAsync(UsuarioActual, "Permisos actualizados", $"Username={usuario.Username} | EsAdmin={usuario.EsAdmin} | PuedeBorrar={usuario.PuedeBorrar} | PuedeReprocesar={usuario.PuedeReprocesar} | PuedeVerCompleto={usuario.PuedeVerCompleto} | Activo={usuario.Activo}");
             UsuariosMensaje = $"Permisos de '{usuario.Username}' actualizados.";
             UsuariosMensajeError = false;
         }
@@ -360,6 +370,7 @@ namespace FinandinaMonitor.UI.Components.Pages
 
             await UsuarioRepository.CambiarPasswordAsync(usuario.Id, nuevaPassword);
             NuevaPasswordPorUsuario.Remove(usuario.Id);
+            await ActividadLogger.RegistrarAsync(UsuarioActual, "Contraseña cambiada por admin", $"Username={usuario.Username}");
             UsuariosMensaje = $"Contraseña de '{usuario.Username}' actualizada.";
             UsuariosMensajeError = false;
         }
@@ -412,6 +423,7 @@ namespace FinandinaMonitor.UI.Components.Pages
             }
 
             await UsuarioRepository.CambiarPasswordAsync(usuario.Id, PasswordNueva);
+            await ActividadLogger.RegistrarAsync(UsuarioActual, "Contraseña cambiada (autoservicio)", string.Empty);
             CambiarPasswordMensaje = "Contraseña actualizada correctamente.";
             CambiarPasswordMensajeError = false;
             PasswordActual = "";
@@ -986,6 +998,16 @@ namespace FinandinaMonitor.UI.Components.Pages
             var selectedItems = CurrentSolicitudes.Where(s => s.IsSelected).Take(MaxReprocesoSimultaneo).ToList();
             if (!selectedItems.Any() || IsProcessing) return;
 
+            if (!ReprocesoLockService.TryAcquire(UsuarioActual, out var usuarioEnCurso))
+            {
+                AlertMessage = $"Ya hay un reproceso en curso (usuario: {usuarioEnCurso ?? "otro usuario"}). Espera a que termine e inténtalo de nuevo.";
+                IsAlertError = true;
+                StateHasChanged();
+                return;
+            }
+
+            try
+            {
             IsProcessing = true;
             ProgressPercent = 0;
             AlertMessage = "Validando conexión a MariaDB...";
@@ -1009,9 +1031,31 @@ namespace FinandinaMonitor.UI.Components.Pages
             int procesados = 0;
             int exitos = 0;
             int fallidos = 0;
+            int omitidos = 0;
 
             foreach (var item in selectedItems)
             {
+                var idSolicitud = item.Solicitud.IdSolicitud;
+
+                if (HistoricoReprocesoStore.FueReprocesadoRecientemente(idSolicitud, VentanaAntiDuplicadoReproceso, out _))
+                {
+                    item.EstadoReproceso = "Omitido: esta solicitud ya se reprocesó hace poco (posible duplicado)";
+                    item.IsSelected = false;
+                    omitidos++;
+                    await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso omitido (duplicado)", $"IdSolicitud={idSolicitud}");
+                    procesados++;
+                    ProgressPercent = (int)((double)procesados / total * 100);
+                    StateHasChanged();
+                    continue;
+                }
+
+                if (procesados > 0)
+                {
+                    item.EstadoReproceso = $"Esperando {EsperaEntreReprocesos.TotalSeconds:0}s antes del siguiente reproceso...";
+                    StateHasChanged();
+                    await Task.Delay(EsperaEntreReprocesos);
+                }
+
                 RegistrarEnHistorico(item.Solicitud, "Simple");
 
                 try
@@ -1019,40 +1063,44 @@ namespace FinandinaMonitor.UI.Components.Pages
                     item.EstadoReproceso = "Consultando MariaDB...";
                     StateHasChanged();
 
-                    var logResult = await LogApiService.GetAdicionalInicioFirmaAsync(item.Solicitud.IdSolicitud);
+                    var logResult = await LogApiService.GetAdicionalInicioFirmaAsync(idSolicitud);
 
                     if (!logResult.Success)
                     {
                         item.EstadoReproceso = $"Error API: {logResult.ErrorMessage}";
                         item.IsSelected = false; // Auto uncheck on failure
                         fallidos++;
+                        await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso simple fallido", $"IdSolicitud={idSolicitud} | Error={logResult.ErrorMessage}");
                     }
                     else
                     {
                         item.EstadoReproceso = "Enviando a Swagger...";
                         StateHasChanged();
 
-                        var reprocesoResult = await FirmaApiService.ReprocesarSolicitudAsync(logResult.Adicional!);
+                        var reprocesoResult = await FirmaApiService.ReprocesarSolicitudAsync(logResult.Adicional!, idSolicitud);
                         if (reprocesoResult.Success)
                         {
                             item.EstadoReproceso = "Éxito";
                             item.IsSelected = false; // Auto uncheck on success
                             exitos++;
                             ExitosasHoyCount++; // Incrementamos el contador de exitosas hoy de forma optimista
+                            await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso simple exitoso", $"IdSolicitud={idSolicitud}");
                         }
                         else
                         {
                             item.EstadoReproceso = $"Fallo al reprocesar: {reprocesoResult.ErrorMessage}";
                             item.IsSelected = false;
                             fallidos++;
+                            await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso simple fallido", $"IdSolicitud={idSolicitud} | Error={reprocesoResult.ErrorMessage}");
                         }
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     item.EstadoReproceso = "Error crítico de ejecución";
                     item.IsSelected = false;
                     fallidos++;
+                    await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso simple error crítico", $"IdSolicitud={idSolicitud} | {ex.Message}");
                 }
 
                 procesados++;
@@ -1062,18 +1110,23 @@ namespace FinandinaMonitor.UI.Components.Pages
 
             IsProcessing = false;
 
-            if (fallidos == 0)
+            if (fallidos == 0 && omitidos == 0)
             {
                 AlertMessage = $"Proceso finalizado. Se reprocesaron exitosamente {exitos} solicitudes.";
                 IsAlertError = false;
             }
             else
             {
-                AlertMessage = $"Proceso finalizado. {exitos} exitosos, {fallidos} fallidos. Verifique la columna de estado.";
+                AlertMessage = $"Proceso finalizado. {exitos} exitosos, {fallidos} fallidos, {omitidos} omitidos (duplicados). Verifique la columna de estado.";
                 IsAlertError = true;
             }
 
             StateHasChanged();
+            }
+            finally
+            {
+                ReprocesoLockService.Release();
+            }
         }
 
         protected bool IsProcessingAvanzado { get; set; } = false;
@@ -1101,6 +1154,16 @@ namespace FinandinaMonitor.UI.Components.Pages
             var selectedItems = CurrentSolicitudes.Where(s => s.IsSelected).Take(MaxReprocesoSimultaneo).ToList();
             if (!selectedItems.Any() || IsProcessing || IsProcessingAvanzado) return;
 
+            if (!ReprocesoLockService.TryAcquire(UsuarioActual, out var usuarioEnCurso))
+            {
+                AlertMessage = $"Ya hay un reproceso en curso (usuario: {usuarioEnCurso ?? "otro usuario"}). Espera a que termine e inténtalo de nuevo.";
+                IsAlertError = true;
+                StateHasChanged();
+                return;
+            }
+
+            try
+            {
             IsProcessing = true;
             IsProcessingAvanzado = true;
             ProgressPercent = 0;
@@ -1112,10 +1175,31 @@ namespace FinandinaMonitor.UI.Components.Pages
             int procesados = 0;
             int exitos = 0;
             int fallidos = 0;
+            int omitidos = 0;
 
             foreach (var item in selectedItems)
             {
                 var idSolicitud = item.Solicitud.IdSolicitud;
+
+                if (HistoricoReprocesoStore.FueReprocesadoRecientemente(idSolicitud, VentanaAntiDuplicadoReproceso, out _))
+                {
+                    item.EstadoReproceso = "Omitido: esta solicitud ya se reprocesó hace poco (posible duplicado)";
+                    item.IsSelected = false;
+                    omitidos++;
+                    await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso avanzado omitido (duplicado)", $"IdSolicitud={idSolicitud}");
+                    procesados++;
+                    ProgressPercent = (int)((double)procesados / total * 100);
+                    StateHasChanged();
+                    continue;
+                }
+
+                if (procesados > 0)
+                {
+                    item.EstadoReproceso = $"Esperando {EsperaEntreReprocesos.TotalSeconds:0}s antes del siguiente reproceso...";
+                    StateHasChanged();
+                    await Task.Delay(EsperaEntreReprocesos);
+                }
+
                 RegistrarEnHistorico(item.Solicitud, "Avanzado");
 
                 try
@@ -1219,6 +1303,7 @@ namespace FinandinaMonitor.UI.Components.Pages
                 }
                 finally
                 {
+                    await ActividadLogger.RegistrarAsync(UsuarioActual, "Reproceso avanzado", $"IdSolicitud={idSolicitud} | Resultado={item.EstadoReproceso}");
                     procesados++;
                     ProgressPercent = (int)((double)procesados / total * 100);
                     StateHasChanged();
@@ -1228,18 +1313,23 @@ namespace FinandinaMonitor.UI.Components.Pages
             IsProcessing = false;
             IsProcessingAvanzado = false;
 
-            if (fallidos == 0)
+            if (fallidos == 0 && omitidos == 0)
             {
                 AlertMessage = $"Proceso finalizado (nuevo flujo). Se reprocesaron exitosamente {exitos} solicitudes.";
                 IsAlertError = false;
             }
             else
             {
-                AlertMessage = $"Proceso finalizado (nuevo flujo). {exitos} exitosos, {fallidos} fallidos. Verifique la columna de estado.";
+                AlertMessage = $"Proceso finalizado (nuevo flujo). {exitos} exitosos, {fallidos} fallidos, {omitidos} omitidos (duplicados). Verifique la columna de estado.";
                 IsAlertError = true;
             }
 
             StateHasChanged();
+            }
+            finally
+            {
+                ReprocesoLockService.Release();
+            }
         }
 
         private static string PatchAdicionalJson(string adicionalJson, int origen)
@@ -1291,6 +1381,7 @@ namespace FinandinaMonitor.UI.Components.Pages
                 RadNumber = solicitud.RadNumber,
                 NumeroDocumento = solicitud.NumeroDocumento,
                 TipoReproceso = tipoReproceso,
+                Usuario = UsuarioActual,
                 EstadoFirmaInicial = solicitud.IdEstadoFirma,
                 EstadoBiometriaInicial = solicitud.IdEstadoBiometria,
                 FechaReproceso = HoraLocal.Ahora

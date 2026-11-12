@@ -39,6 +39,8 @@ builder.Services.AddScoped<IFirmaApiService, FirmaApiService>();
 builder.Services.AddScoped<ILogApiService, LogApiService>();
 builder.Services.AddScoped<IReprocesoAvanzadoApiService, ReprocesoAvanzadoApiService>();
 builder.Services.AddScoped<ReprocesoApplicationService>();
+builder.Services.AddSingleton<IActividadLogger, ActividadLogger>();
+builder.Services.AddSingleton<IReprocesoLockService, ReprocesoLockService>();
 
 // Histórico de reprocesos: almacén en memoria compartido + verificación en segundo plano (5 min después)
 builder.Services.AddSingleton<IHistoricoReprocesoStore, HistoricoReprocesoStore>();
@@ -115,7 +117,7 @@ app.MapHealthChecks("/healthz");
 
 // Login/Logout vía POST de formulario normal (no Blazor): dispara un reload de página completo
 // para que el circuito de Blazor arranque de nuevo ya con la cookie de autenticación presente.
-app.MapPost("/Account/Login", async (HttpContext http, IUsuarioRepository usuarios, [FromForm] string username, [FromForm] string password, [FromForm] string? returnUrl) =>
+app.MapPost("/Account/Login", async (HttpContext http, IUsuarioRepository usuarios, IActividadLogger actividadLogger, [FromForm] string username, [FromForm] string password, [FromForm] string? returnUrl) =>
 {
     // returnUrl puede venir con un ?loginError=1 de un intento previo: se descarta la query
     // para no ir acumulando parámetros en la URL en intentos fallidos sucesivos.
@@ -124,8 +126,11 @@ app.MapPost("/Account/Login", async (HttpContext http, IUsuarioRepository usuari
     var usuario = await usuarios.ValidarCredencialesAsync(username, password);
     if (usuario is null)
     {
+        await actividadLogger.RegistrarAsync(username, "Login fallido", $"IP={http.Connection.RemoteIpAddress}");
         return Results.Redirect($"{returnPath}?loginError=1");
     }
+
+    await actividadLogger.RegistrarAsync(usuario.Username, "Login exitoso", $"IP={http.Connection.RemoteIpAddress}");
 
     var claims = new[]
     {
@@ -141,8 +146,9 @@ app.MapPost("/Account/Login", async (HttpContext http, IUsuarioRepository usuari
     return Results.Redirect(returnPath);
 }).DisableAntiforgery();
 
-app.MapPost("/Account/Logout", async (HttpContext http) =>
+app.MapPost("/Account/Logout", async (HttpContext http, IActividadLogger actividadLogger) =>
 {
+    await actividadLogger.RegistrarAsync(http.User.Identity?.Name, "Logout", string.Empty);
     await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/");
 }).DisableAntiforgery();

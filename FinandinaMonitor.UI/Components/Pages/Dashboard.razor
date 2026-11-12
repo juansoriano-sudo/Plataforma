@@ -277,6 +277,7 @@
                     <tr>
                         <th>ID Solicitud</th>
                         <th>Tipo</th>
+                        <th>Usuario</th>
                         <th>Rad Number</th>
                         <th>Estado al Reprocesar</th>
                         <th>Fecha Reproceso</th>
@@ -289,7 +290,7 @@
                     @if (!Historico.Any())
                     {
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                            <td colspan="9" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
                                 Aún no se han reprocesado firmas en esta sesión.
                             </td>
                         </tr>
@@ -301,6 +302,7 @@
                             <tr>
                                 <td style="font-weight: 600;">@h.IdSolicitud</td>
                                 <td>@h.TipoReproceso</td>
+                                <td>@(h.Usuario ?? "-")</td>
                                 <td style="color: var(--text-secondary); font-family: monospace;">@h.RadNumber</td>
                                 <td>
                                     <span class="status-pill pill-firma">@h.EstadoFirmaInicial</span>
