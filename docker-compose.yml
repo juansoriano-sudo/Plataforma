@@ -7,14 +7,41 @@ services:
     container_name: finandina-monitor
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # Puerto externo fijo (los usuarios ya se conectan a https://<host>:56024/) -> puerto interno del contenedor
+      - "56024:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # PENDIENTE: Integrated Security no funciona dentro del contenedor Linux.
-      # El DBA debe crear un login SQL Server dedicado (ver scripts/create-motorfirma-login.sql)
-      # y completar SQLSERVER_USER / SQLSERVER_PASSWORD en el .env antes de levantar el contenedor.
-      ConnectionStrings__FinandinaDb: "Server=192.168.118.53,61733;Database=MotorFirma;User Id=${SQLSERVER_USER};Password=${SQLSERVER_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
+      TZ: America/Bogota
+
+      # Certificado HTTPS que Kestrel sirve dentro del contenedor (el mismo dev-cert que ya usan los usuarios).
+      # Ver README: cómo exportarlo a ./certs/finandina.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/finandina.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Password: "${CERT_PASSWORD}"
+
+      # SOLUCIÓN TEMPORAL: NTLM (gss-ntlmssp) con cuenta de dominio mientras el DBA crea el login
+      # dedicado (ver scripts/create-motorfirma-login.sql). Cuando llegue el login:
+      #   1) Cambiar esta cadena a User Id=${SQLSERVER_USER};Password=${SQLSERVER_PASSWORD};Encrypt=True
+      #   2) Quitar NTLM_USER_FILE, el volumen de ntlm_user y gss-ntlmssp del Dockerfile
+      ConnectionStrings__FinandinaDb: "Server=192.168.118.53,61733;Database=MotorFirma;Integrated Security=True;Encrypt=False;TrustServerCertificate=True;"
+      ConnectionStrings__OrqBiometriaDb: "Server=192.168.118.53,61733;Database=ORQBIOMETRIA;Integrated Security=True;Encrypt=False;TrustServerCertificate=True;"
+      NTLM_USER_FILE: /run/secrets/ntlm_user
+
       ConnectionStrings__MariaDbLogs: "Server=192.168.118.58;Port=3306;Database=LogMotorFirma;Uid=n8n_consultas;Pwd=${MARIADB_LOGS_PASSWORD};"
       FirmaApi__BaseUrl: "https://10.240.1.117:4023"
       ReprocessApi__BaseUrl: "https://10.240.1.117:4023"
       SignatureApi__BaseUrl: "https://10.240.1.117:4022"
+
+      # Base propia de usuarios/permisos (SQLite, persistida en ./data/usuarios).
+      ConnectionStrings__UsuariosDb: "Data Source=/app/usuarios/usuarios.db"
+      # Admin inicial: solo se crea si la tabla Usuarios está vacía al arrancar.
+      ADMIN_USER: "${ADMIN_USER}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+    volumes:
+      - ./certs/finandina.pfx:/https/finandina.pfx:ro
+      - ./ntlm_user:/run/secrets/ntlm_user:ro
+      # Llaves de Data Protection (antiforgery, etc.): si no persisten, cada reinicio
+      # invalida las sesiones/formularios abiertos de los usuarios.
+      - ./data/dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
+      - ./data/usuarios:/app/usuarios
+      # Actividad del monitor (login/logout, reprocesos, cambios de usuarios): un archivo por día.
+      - ./data/logs/actividad:/app/logs/actividad

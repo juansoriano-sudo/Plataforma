@@ -1,0 +1,16 @@
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\bin\Release\net10.0\FinandinaMonitor.Application.deps.json
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\bin\Release\net10.0\FinandinaMonitor.Application.dll
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\bin\Release\net10.0\FinandinaMonitor.Application.pdb
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\bin\Release\net10.0\FinandinaMonitor.Domain.dll
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\bin\Release\net10.0\FinandinaMonitor.Domain.pdb
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.csproj.AssemblyReference.cache
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.AssemblyInfoInputs.cache
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.AssemblyInfo.cs
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.csproj.CoreCompileInputs.cache
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.sourcelink.json
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\Finandin.47E496C2.Up2Date
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.dll
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\refint\FinandinaMonitor.Application.dll
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\FinandinaMonitor.Application.pdb
+C:\Users\juasorc\Documents\BOTS\Plataforma\FinandinaMonitor.Application\obj\Release\net10.0\ref\FinandinaMonitor.Application.dll

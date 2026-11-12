@@ -9,10 +9,12 @@ namespace FinandinaMonitor.Application.Services
     public class ReprocesoApplicationService
     {
         private readonly ISolicitudRepository _repository;
+        private readonly IBiometriaRepository _biometriaRepository;
 
-        public ReprocesoApplicationService(ISolicitudRepository repository)
+        public ReprocesoApplicationService(ISolicitudRepository repository, IBiometriaRepository biometriaRepository)
         {
             _repository = repository;
+            _biometriaRepository = biometriaRepository;
         }
 
         public async Task<IEnumerable<SolicitudFirma>> ObtenerPendientesAsync(int estadoFirma = 100, int estadoBiometria = 70)
@@ -45,6 +47,11 @@ namespace FinandinaMonitor.Application.Services
         public async Task<(int IdEstadoFirma, int IdEstadoBiometria)?> ObtenerEstadoActualAsync(long idSolicitud)
         {
             return await _repository.GetEstadoActualAsync(idSolicitud);
+        }
+
+        public async Task<IntentoBiometricoResumen?> ObtenerResumenBiometriaAsync(long idSolicitud)
+        {
+            return await _biometriaRepository.ObtenerResumenPorSolicitudAsync(idSolicitud);
         }
     }
 }

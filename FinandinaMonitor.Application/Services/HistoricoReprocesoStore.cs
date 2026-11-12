@@ -94,5 +94,17 @@ namespace FinandinaMonitor.Application.Services
                 .Where(i => !i.Verificado && (ahora - i.FechaReproceso) >= antiguedadMinima)
                 .ToList();
         }
+
+        public bool FueReprocesadoRecientemente(long idSolicitud, TimeSpan ventana, out string? usuarioAnterior)
+        {
+            var ahora = HoraLocal.Ahora;
+            var anterior = _items.Values
+                .Where(i => i.IdSolicitud == idSolicitud && (ahora - i.FechaReproceso) < ventana)
+                .OrderByDescending(i => i.FechaReproceso)
+                .FirstOrDefault();
+
+            usuarioAnterior = anterior?.Usuario;
+            return anterior is not null;
+        }
     }
 }

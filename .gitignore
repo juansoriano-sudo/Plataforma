@@ -1,1 +1,4 @@
 .env
+ntlm_user
+certs/*.pfx
+data/

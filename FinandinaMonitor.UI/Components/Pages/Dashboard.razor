@@ -17,6 +17,22 @@
             <button class="theme-toggle" @onclick="ToggleTheme">
                 @(IsDarkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro")
             </button>
+            @if (EstaAutenticado)
+            {
+                <span class="badge-finandina" title="@(EsAdmin ? "Administrador" : "Usuario autenticado")">👤 @UsuarioActual</span>
+                @if (EsAdmin)
+                {
+                    <button class="tab-btn @(ActiveTab == 6 ? "active" : "")" @onclick="() => SetTab(6)">Usuarios</button>
+                }
+                <button class="btn-secondary-custom" @onclick="AbrirModalCambiarPassword">Cambiar Contraseña</button>
+                <form method="post" action="/Account/Logout" data-enhance="false">
+                    <button class="btn-secondary-custom" type="submit">Cerrar Sesión</button>
+                </form>
+            }
+            else
+            {
+                <button class="btn-secondary-custom" @onclick="AbrirModalLogin">Iniciar Sesión</button>
+            }
             <span class="badge-finandina">Servicio Interno</span>
         </div>
     </header>
@@ -43,10 +59,6 @@
             <span class="kpi-label">Fuera de Línea</span>
             <span class="kpi-value">@Solicitudes2000.Count</span>
         </div>
-        <div class="kpi-card kpi-primary" style="border-left-color: var(--text-muted)">
-            <span class="kpi-label">Fila(s) Seleccionada(s) (máx. @MaxReprocesoSimultaneo)</span>
-            <span class="kpi-value">@SelectedCount</span>
-        </div>
         @foreach (var origen in TotalEnColaPorOrigen)
         {
             <div class="kpi-card kpi-primary" style="border-left-color: var(--text-muted)">
@@ -55,6 +67,24 @@
             </div>
         }
     </section>
+
+    @if (!IsLoading)
+    {
+        <div class="monitor-banner @(ColaAlta ? "monitor-banner-warning" : "monitor-banner-ok")">
+            @if (ColaAlta)
+            {
+                <span>⚠ Muchas firmas detenidas, por favor validar.</span>
+            }
+            else
+            {
+                <span>✔ Monitor de firmas normal.</span>
+            }
+            @if (UltimaActualizacion.HasValue)
+            {
+                <span class="monitor-banner-hora">Última actualización: @UltimaActualizacion.Value.ToString("dd/MM/yyyy HH:mm:ss")</span>
+            }
+        </div>
+    }
 
     @if (AlertasActivas.Any())
     {
@@ -65,7 +95,10 @@
                 <div class="kpi-card kpi-card-alerta @(alerta.Disparada ? "kpi-error" : "kpi-primary")">
                     <div class="kpi-card-alerta-header">
                         <span class="kpi-label">@(string.IsNullOrEmpty(alerta.Descripcion) ? alerta.Termino : alerta.Descripcion)</span>
-                        <button class="btn-editar-alerta" title="Editar alerta" @onclick="() => AbrirModalEditarAlerta(alerta)">✎</button>
+                        @if (EstaAutenticado)
+                        {
+                            <button class="btn-editar-alerta" title="Editar alerta" @onclick="() => AbrirModalEditarAlerta(alerta)">✎</button>
+                        }
                     </div>
                     <span class="kpi-value">@alerta.UltimoConteo</span>
                     <span class="kpi-card-alerta-umbral">Umbral (Cantidad): @alerta.Umbral</span>
@@ -74,19 +107,27 @@
         </section>
     }
 
+    @if (EstaAutenticado)
+    {
     <!-- Tabs -->
     <div class="tabs-container">
         <button class="tab-btn @(ActiveTab == 1 ? "active" : "")" @onclick="() => SetTab(1)">PENDIENTES</button>
-        <button class="tab-btn @(ActiveTab == 2 ? "active" : "")" @onclick="() => SetTab(2)">EXITOSAS</button>
+        @if (EstaAutenticado)
+        {
+            <button class="tab-btn @(ActiveTab == 2 ? "active" : "")" @onclick="() => SetTab(2)">EXITOSAS</button>
+        }
         <button class="tab-btn @(ActiveTab == 3 ? "active" : "")" @onclick="() => SetTab(3)">FUERA DE LÍNEA</button>
         <button class="tab-btn @(ActiveTab == 4 ? "active" : "")" @onclick="() => SetTab(4)">BUSCADOR</button>
-        <button class="tab-btn @(ActiveTab == 5 ? "active" : "")" @onclick="() => SetTab(5)">HISTÓRICO</button>
-        @foreach (var alerta in AlertasActivas)
+        @if (EstaAutenticado)
         {
-            <button class="tab-btn @(ActiveAlertaId == alerta.Id ? "active" : "") @(alerta.Disparada ? "tab-alerta-disparada" : "")"
-                    @onclick="() => SeleccionarTabAlertaAsync(alerta.Id)">
-                ⚠ @(string.IsNullOrEmpty(alerta.Descripcion) ? alerta.Termino : alerta.Descripcion)
-            </button>
+            <button class="tab-btn @(ActiveTab == 5 ? "active" : "")" @onclick="() => SetTab(5)">HISTÓRICO</button>
+            @foreach (var alerta in AlertasActivas)
+            {
+                <button class="tab-btn @(ActiveAlertaId == alerta.Id ? "active" : "") @(alerta.Disparada ? "tab-alerta-disparada" : "")"
+                        @onclick="() => SeleccionarTabAlertaAsync(alerta.Id)">
+                    ⚠ @(string.IsNullOrEmpty(alerta.Descripcion) ? alerta.Termino : alerta.Descripcion)
+                </button>
+            }
         }
     </div>
 
@@ -236,6 +277,7 @@
                     <tr>
                         <th>ID Solicitud</th>
                         <th>Tipo</th>
+                        <th>Usuario</th>
                         <th>Rad Number</th>
                         <th>Estado al Reprocesar</th>
                         <th>Fecha Reproceso</th>
@@ -248,7 +290,7 @@
                     @if (!Historico.Any())
                     {
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                            <td colspan="9" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
                                 Aún no se han reprocesado firmas en esta sesión.
                             </td>
                         </tr>
@@ -260,6 +302,7 @@
                             <tr>
                                 <td style="font-weight: 600;">@h.IdSolicitud</td>
                                 <td>@h.TipoReproceso</td>
+                                <td>@(h.Usuario ?? "-")</td>
                                 <td style="color: var(--text-secondary); font-family: monospace;">@h.RadNumber</td>
                                 <td>
                                     <span class="status-pill pill-firma">@h.EstadoFirmaInicial</span>
@@ -299,6 +342,67 @@
             </table>
         </div>
       }
+      else if (ActiveTab == 6 && EsAdmin)
+      {
+        <h3 class="kpi-alertas-titulo">Crear usuario</h3>
+        <div class="actions-panel" style="gap: 1rem; flex-wrap: wrap; align-items: center;">
+            <input type="text" placeholder="Usuario" @bind="NuevoUsuarioUsername"
+                   style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+            <input type="password" placeholder="Contraseña" @bind="NuevoUsuarioPassword"
+                   style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+            <label><input type="checkbox" @bind="NuevoUsuarioEsAdmin" /> Admin</label>
+            <label><input type="checkbox" @bind="NuevoUsuarioPuedeBorrar" /> Puede Borrar</label>
+            <label><input type="checkbox" @bind="NuevoUsuarioPuedeReprocesar" /> Puede Reprocesar</label>
+            <label><input type="checkbox" @bind="NuevoUsuarioPuedeVerCompleto" /> Ver Completo</label>
+            <button class="btn-primary-custom" @onclick="CrearUsuarioAsync">Crear</button>
+        </div>
+        @if (!string.IsNullOrEmpty(UsuariosMensaje))
+        {
+            <p class="@(UsuariosMensajeError ? "status-error" : "status-success")">@UsuariosMensaje</p>
+        }
+
+        <div class="table-responsive" style="margin-top: 1rem;">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Admin</th>
+                        <th>Puede Borrar</th>
+                        <th>Puede Reprocesar</th>
+                        <th>Ver Completo</th>
+                        <th>Activo</th>
+                        <th></th>
+                        <th>Nueva Contraseña</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var usuario in Usuarios)
+                    {
+                        <tr>
+                            <td>@usuario.Username</td>
+                            <td><input type="checkbox" @bind="usuario.EsAdmin" /></td>
+                            <td><input type="checkbox" @bind="usuario.PuedeBorrar" /></td>
+                            <td><input type="checkbox" @bind="usuario.PuedeReprocesar" /></td>
+                            <td><input type="checkbox" @bind="usuario.PuedeVerCompleto" /></td>
+                            <td><input type="checkbox" @bind="usuario.Activo" /></td>
+                            <td>
+                                <button class="btn-secondary-custom" @onclick="() => GuardarPermisosUsuarioAsync(usuario)">Guardar</button>
+                            </td>
+                            <td>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="password" placeholder="Nueva contraseña"
+                                           value="@ObtenerNuevaPassword(usuario.Id)"
+                                           @oninput="e => EstablecerNuevaPassword(usuario.Id, e.Value?.ToString() ?? string.Empty)"
+                                           style="padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+                                    <button class="btn-secondary-custom" @onclick="() => CambiarPasswordUsuarioAsync(usuario)">Cambiar</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+      }
       else
       {
         <div class="actions-panel" style="gap: 1.5rem; flex-wrap: wrap;">
@@ -315,29 +419,32 @@
                 <button class="btn-secondary-custom" @onclick="CargarDatosAsync" disabled="@IsProcessing">
                     Recargar
                 </button>
-                <button class="btn-primary-custom" @onclick="ReprocesarSeleccionadosAsync" disabled="@(SelectedCount == 0 || IsProcessing)">
-                    @if (IsProcessing && !IsProcessingAvanzado)
-                    {
-                        <span>Procesando (@ProgressPercent%)...</span>
-                    }
-                    else
-                    {
-                        <span>Reprocesar Seleccionados</span>
-                    }
-                </button>
-                @if (ActiveTab == 1 || ActiveTab == 2 || ActiveTab == 4)
+                @if (!ModoResumen)
                 {
-                    <button class="btn-primary-custom" title="ReprocessCases → Signature/Save (con reintento vía UpdateState si falla)"
-                             @onclick="AbrirModalConfirmacionBorrado" disabled="@(SelectedCount == 0 || IsProcessing)">
-                        @if (IsProcessingAvanzado)
+                    <button class="btn-primary-custom" @onclick="ReprocesarSeleccionadosAsync" disabled="@(!PuedeReprocesar || SelectedCount == 0 || IsProcessing)" title="@(PuedeReprocesar ? "" : "No tienes permiso para reprocesar")">
+                        @if (IsProcessing && !IsProcessingAvanzado)
                         {
                             <span>Procesando (@ProgressPercent%)...</span>
                         }
                         else
                         {
-                            <span>Borrar Documentos</span>
+                            <span>Reprocesar Seleccionados</span>
                         }
                     </button>
+                    @if (ActiveTab == 1 || ActiveTab == 2 || ActiveTab == 4)
+                    {
+                        <button class="btn-primary-custom" title="@(PuedeBorrar ? "ReprocessCases → Signature/Save (con reintento vía UpdateState si falla)" : "No tienes permiso para borrar documentos")"
+                                 @onclick="AbrirModalConfirmacionBorrado" disabled="@(!PuedeBorrar || SelectedCount == 0 || IsProcessing)">
+                            @if (IsProcessingAvanzado)
+                            {
+                                <span>Procesando (@ProgressPercent%)...</span>
+                            }
+                            else
+                            {
+                                <span>Borrar Documentos</span>
+                            }
+                        </button>
+                    }
                 }
             </div>
         </div>
@@ -515,6 +622,55 @@
         </div>
 
         <!-- Grid Table -->
+        @if (ModoResumen)
+        {
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>ID Solicitud</th>
+                            <th>Origen</th>
+                            <th>Rad Number</th>
+                            <th>Firma (@(ActiveTab == 1 ? "100" : ActiveTab == 2 ? "1000" : "-"))</th>
+                            <th>Biometría (@(ActiveTab == 3 ? "2000" : ActiveTab == 4 ? "-" : "70"))</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (IsLoading)
+                        {
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                    Conectando a base de datos [MotorFirma]...
+                                </td>
+                            </tr>
+                        }
+                        else if (!FilteredSolicitudes.Any())
+                        {
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                                    @(ActiveTab == 4 ? "Ingrese un ID Solicitud, Rad Number o Documento y presione Buscar." : "No se encontraron firmas con esos criterios.")
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in SolicitudesPaginadas)
+                            {
+                                <tr>
+                                    <td style="font-weight: 600;">@item.Solicitud.IdSolicitud</td>
+                                    <td><span class="status-pill">@OrigenSolicitudCatalogo.ObtenerNombre(item.Solicitud.Origen)</span></td>
+                                    <td style="color: var(--text-secondary); font-family: monospace;">@item.Solicitud.RadNumber</td>
+                                    <td><span class="status-pill pill-firma">@item.Solicitud.IdEstadoFirma</span></td>
+                                    <td><span class="status-pill pill-biometria">@item.Solicitud.IdEstadoBiometria</span></td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
         <div class="table-responsive">
             <table class="custom-table">
                 <thead>
@@ -522,6 +678,7 @@
                         <th style="width: 45px; text-align: center;">
                             <input type="checkbox" class="custom-checkbox" @onchange="ToggleSelectAll" checked="@IsAllSelected" disabled="@IsProcessing" />
                         </th>
+                        <th style="width: 45px;"></th>
                         <th>ID Solicitud</th>
                         <th>Origen</th>
                         <th>Rad Number</th>
@@ -530,7 +687,7 @@
                         <th>Última Modificación</th>
                         <th>Firma (@(ActiveTab == 1 ? "100" : ActiveTab == 2 ? "1000" : "-"))</th>
                         <th>Biometría (@(ActiveTab == 3 ? "2000" : ActiveTab == 4 ? "-" : "70"))</th>
-                        <th>Observación</th>
+                        <th>Estado Biometría (Último Intento)</th>
                         <th>Estado de Reproceso</th>
                     </tr>
                 </thead>
@@ -538,7 +695,7 @@
                     @if (IsLoading)
                     {
                         <tr>
-                            <td colspan="12" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                            <td colspan="13" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
                                 <div style="margin-bottom: 1rem;">Conectando a base de datos [MotorFirma]...</div>
                                 <div style="display:inline-block; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.1); border-radius: 50%; border-top-color: var(--primary-red);"></div>
                             </td>
@@ -547,14 +704,14 @@
                     else if (!FilteredSolicitudes.Any())
                     {
                         <tr>
-                            <td colspan="12" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
+                            <td colspan="13" style="text-align: center; padding: 4rem 1rem; color: var(--text-secondary);">
                                 @(ActiveTab == 4 ? "Ingrese un ID Solicitud, Rad Number o Documento y presione Buscar." : "No se encontraron firmas con esos criterios.")
                             </td>
                         </tr>
                     }
                     else
                     {
-                        @foreach (var item in FilteredSolicitudes)
+                        @foreach (var item in SolicitudesPaginadas)
                         {
                             <tr class="@(item.IsSelected ? "selected-row" : "")">
                                 <td style="text-align: center;">
@@ -562,6 +719,16 @@
                                            checked="@item.IsSelected"
                                            @onchange="e => ToggleSelectItem(item, e)"
                                            disabled="@(IsProcessing || (!item.IsSelected && SelectedCount >= MaxReprocesoSimultaneo))" />
+                                </td>
+                                <td style="text-align: center;">
+                                    @{
+                                        var estaExpandido = ExpandidoBiometria.Contains(item.Solicitud.IdSolicitud);
+                                        var estaCargando = CargandoBiometria.Contains(item.Solicitud.IdSolicitud);
+                                    }
+                                    <button type="button" class="btn-toggle-biometria" title="Ver intentos de biometría"
+                                            @onclick="() => ToggleBiometriaAsync(item)" disabled="@estaCargando">
+                                        @(estaCargando ? "…" : (estaExpandido ? "▲" : "▼"))
+                                    </button>
                                 </td>
                                 <td style="font-weight: 600;">@item.Solicitud.IdSolicitud</td>
                                 <td>
@@ -598,9 +765,29 @@
                                     <span class="status-pill pill-biometria">@item.Solicitud.IdEstadoBiometria</span>
                                 </td>
                                 <td>
-                                    <div style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@(item.Solicitud.Observacion ?? item.Solicitud.Descripcion)">
-                                        @(item.Solicitud.Observacion ?? item.Solicitud.Descripcion ?? "-")
-                                    </div>
+                                    @{
+                                        var cargandoEstadoBiometria = CargandoBiometria.Contains(item.Solicitud.IdSolicitud);
+                                        var tieneResumenFila = ResumenBiometriaPorSolicitud.TryGetValue(item.Solicitud.IdSolicitud, out var resumenFila);
+                                    }
+                                    @if (cargandoEstadoBiometria || !tieneResumenFila)
+                                    {
+                                        <span class="status-pending">Consultando...</span>
+                                    }
+                                    else if (resumenFila is null || resumenFila.TotalIntentos == 0)
+                                    {
+                                        <span class="status-pending">Sin intentos</span>
+                                    }
+                                    else
+                                    {
+                                        var estadoTexto = resumenFila.UltimoEstado ?? "-";
+                                        var estadoLower = estadoTexto.ToLowerInvariant();
+                                        var cssClase = estadoLower.Contains("exito") ? "status-success"
+                                            : (estadoLower.Contains("error") || estadoLower.Contains("fall") || estadoLower.Contains("rechaz")) ? "status-error"
+                                            : "status-working";
+                                        <span class="@cssClase" title="idCaso @resumenFila.UltimoIdCaso · @(resumenFila.UltimaFechaCreo?.ToString("dd/MM/yyyy HH:mm") ?? "-")">
+                                            @estadoTexto
+                                        </span>
+                                    }
                                 </td>
                                 <td>
                                     @if (string.IsNullOrEmpty(item.EstadoReproceso))
@@ -621,13 +808,98 @@
                                     }
                                 </td>
                             </tr>
+                            @if (ExpandidoBiometria.Contains(item.Solicitud.IdSolicitud))
+                            {
+                                <tr>
+                                    <td colspan="13" style="background: var(--bg-main); padding: 1rem 1.5rem;">
+                                        @{
+                                            var tieneResumen = ResumenBiometriaPorSolicitud.TryGetValue(item.Solicitud.IdSolicitud, out var resumenBiometria);
+                                        }
+                                        @if (!tieneResumen)
+                                        {
+                                            <span style="color: var(--text-secondary);">Consultando ORQBIOMETRIA...</span>
+                                        }
+                                        else if (resumenBiometria is null || resumenBiometria.TotalIntentos == 0)
+                                        {
+                                            <span class="status-pending">Sin intentos biométricos asociados en ORQBIOMETRIA.</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="biometria-stats">
+                                                <span class="biometria-stat biometria-stat-total">
+                                                    <span class="biometria-stat-label">Total intentos</span>
+                                                    <span class="biometria-stat-value">@resumenBiometria.TotalIntentos</span>
+                                                </span>
+                                                <span class="biometria-stat">
+                                                    <span class="biometria-stat-label">Regla 0</span>
+                                                    <span class="biometria-stat-value">@resumenBiometria.IntentosRegla0</span>
+                                                </span>
+                                                <span class="biometria-stat">
+                                                    <span class="biometria-stat-label">Regla 1</span>
+                                                    <span class="biometria-stat-value">@resumenBiometria.IntentosRegla1</span>
+                                                </span>
+                                                <span class="biometria-stat">
+                                                    <span class="biometria-stat-label">Regla 99</span>
+                                                    <span class="biometria-stat-value">@resumenBiometria.IntentosRegla99</span>
+                                                </span>
+                                                <span class="biometria-stat">
+                                                    <span class="biometria-stat-label">Canal 0</span>
+                                                    <span class="biometria-stat-value">@resumenBiometria.IntentosCanal0</span>
+                                                </span>
+                                                <span class="biometria-stat">
+                                                    <span class="biometria-stat-label">Canal 1</span>
+                                                    <span class="biometria-stat-value">@resumenBiometria.IntentosCanal1</span>
+                                                </span>
+                                            </div>
+                                            <table class="custom-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Id Caso</th>
+                                                        <th>Id Cliente</th>
+                                                        <th>Id Canal</th>
+                                                        <th>Id Regla</th>
+                                                        <th>Id Estado</th>
+                                                        <th>Estado</th>
+                                                        <th>Fecha Creo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var intento in resumenBiometria.Intentos)
+                                                    {
+                                                        <tr>
+                                                            <td>@intento.IdCaso</td>
+                                                            <td>@intento.IdCliente</td>
+                                                            <td>@intento.IdCanal</td>
+                                                            <td>@intento.IdRegla</td>
+                                                            <td>@intento.IdEstado</td>
+                                                            <td>@intento.Estado</td>
+                                                            <td>@(intento.FechaCreo?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-")</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </td>
+                                </tr>
+                            }
                         }
                     }
                 </tbody>
             </table>
         </div>
+        }
+
+        @if (!IsLoading && FilteredSolicitudes.Any())
+        {
+            <div class="paginacion" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1rem;">
+                <button class="btn-secondary-custom" @onclick="() => IrAPagina(PaginaActual - 1)" disabled="@(PaginaActual <= 1)">« Anterior</button>
+                <span style="color: var(--text-secondary);">Página @PaginaActual de @TotalPaginas</span>
+                <button class="btn-secondary-custom" @onclick="() => IrAPagina(PaginaActual + 1)" disabled="@(PaginaActual >= TotalPaginas)">Siguiente »</button>
+            </div>
+        }
       }
     </div>
+    }
 
     @if (MostrarModalConfirmacionBorrado)
     {
@@ -711,4 +983,74 @@
             </div>
         </div>
     }
+
+    @if (MostrarModalCambiarPassword)
+    {
+        <div class="modal-overlay" @onclick="CerrarModalCambiarPassword">
+            <div class="modal-box" @onclick:stopPropagation="true">
+                <h3 class="modal-title">Cambiar Contraseña</h3>
+                <div style="display: flex; flex-direction: column; gap: 1rem; margin: 1rem 0;">
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Contraseña actual</label>
+                        <input type="password" @bind="PasswordActual"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Nueva contraseña</label>
+                        <input type="password" @bind="PasswordNueva"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Confirmar nueva contraseña</label>
+                        <input type="password" @bind="PasswordConfirmar"
+                               style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(CambiarPasswordMensaje))
+                    {
+                        <span class="@(CambiarPasswordMensajeError ? "status-error" : "status-success")">@CambiarPasswordMensaje</span>
+                    }
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary-custom" @onclick="CerrarModalCambiarPassword">Cerrar</button>
+                    <button class="btn-primary-custom" @onclick="ConfirmarCambiarPasswordAsync">Guardar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (MostrarModalLogin)
+    {
+        <div class="modal-overlay" @onclick="CerrarModalLogin">
+            <div class="modal-box" @onclick:stopPropagation="true">
+                <h3 class="modal-title">Iniciar Sesión</h3>
+                <form method="post" action="/Account/Login" data-enhance="false">
+                    <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).GetLeftPart(UriPartial.Path))" />
+                    <div style="display: flex; flex-direction: column; gap: 1rem; margin: 1rem 0;">
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Usuario</label>
+                            <input type="text" name="username" required
+                                   style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">Contraseña</label>
+                            <input type="password" name="password" required
+                                   style="padding: 0.6rem 0.9rem; border-radius: 8px; border: 1px solid var(--card-border); background: var(--bg-main); color: var(--text-primary);" />
+                        </div>
+                        @if (!string.IsNullOrEmpty(LoginError))
+                        {
+                            <span class="status-error">@LoginError</span>
+                        }
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary-custom" @onclick="CerrarModalLogin">Cancelar</button>
+                        <button type="submit" class="btn-primary-custom">Entrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    <footer class="app-footer">
+        Creado por Soporte Aplicaciones 2026
+    </footer>
 </div>

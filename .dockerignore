@@ -9,3 +9,8 @@ mariadb_api.py
 Dockerfile
 docker-compose*.yml
 .dockerignore
+.env
+.env.example
+ntlm_user
+ntlm_user.example
+certs/

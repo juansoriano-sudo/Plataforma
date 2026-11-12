@@ -10,6 +10,7 @@ namespace FinandinaMonitor.Domain.Entities
         public string? RadNumber { get; set; }
         public string? NumeroDocumento { get; set; }
         public string TipoReproceso { get; set; } = string.Empty;
+        public string? Usuario { get; set; }
         public int EstadoFirmaInicial { get; set; }
         public int EstadoBiometriaInicial { get; set; }
         public DateTime FechaReproceso { get; set; } = HoraLocal.Ahora;

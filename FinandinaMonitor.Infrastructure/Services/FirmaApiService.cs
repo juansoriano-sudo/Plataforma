@@ -18,7 +18,7 @@ namespace FinandinaMonitor.Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<(bool Success, string? ErrorMessage)> ReprocesarSolicitudAsync(string adicionalJson)
+        public async Task<(bool Success, string? ErrorMessage)> ReprocesarSolicitudAsync(string adicionalJson, long? idSolicitud = null)
         {
             try
             {
@@ -32,18 +32,18 @@ namespace FinandinaMonitor.Infrastructure.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation("Reproceso exitoso mediante Swagger API.");
+                    _logger.LogInformation("Reproceso exitoso mediante Swagger API. IdSolicitud: {IdSolicitud}", idSolicitud);
                     return (true, null);
                 }
 
                 var errorMsg = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Fallo en reproceso Swagger. Estado: {StatusCode}, Error: {Error}",
-                    response.StatusCode, errorMsg);
+                _logger.LogWarning("Fallo en reproceso Swagger. IdSolicitud: {IdSolicitud}, Estado: {StatusCode}, Error: {Error}",
+                    idSolicitud, response.StatusCode, errorMsg);
                 return (false, $"HTTP {(int)response.StatusCode} {response.StatusCode}: {errorMsg}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error al consumir la API Swagger de reproceso.");
+                _logger.LogError(ex, "Error al consumir la API Swagger de reproceso. IdSolicitud: {IdSolicitud}", idSolicitud);
                 return (false, ex.Message);
             }
         }

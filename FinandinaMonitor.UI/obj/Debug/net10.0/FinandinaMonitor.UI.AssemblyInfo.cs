@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("FinandinaMonitor.UI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a6e1c72c9d9dd4d055dd292f98674a702193e03e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e771621f5fb54b6b65e856e3bd904befcff3d021")]
 [assembly: System.Reflection.AssemblyProductAttribute("FinandinaMonitor.UI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FinandinaMonitor.UI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
